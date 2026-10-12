@@ -1,0 +1,101 @@
+# Watch chain 4663 for the first real corporate action on a Robinhood Stock
+# Token, from a machine that is always on.
+#
+# Robinhood's corporate-actions list shows NVDA in progress for 1 Oct. That is
+# the first chance to observe ShareExactGuard's scheduled path against a real
+# event rather than a mock, and it falls before the submission deadline. Missing
+# it because a laptop was asleep would be an avoidable loss.
+#
+# How it reports: the watcher prints nothing at all when nothing has changed, so
+# an empty run is a quiet run. When it does print — a state transition, a
+# multiplier move, a missed pause, or an unreachable guard — this workflow puts
+# the output in the run summary and then FAILS ON PURPOSE. GitHub emails the
+# repository owner when a scheduled workflow fails, which turns a red X into the
+# notification without any secret, webhook or third-party service.
+#
+# Why the cache: the watcher detects transitions by comparing against the last
+# observation in its JSONL log. Without carrying that log between runs, every
+# poll would be a fresh baseline and no change would ever be noticed.
+
+name: corp-action watch
+
+on:
+  schedule:
+    # Every ten minutes, offset off the hour. Scheduled workflows are queued,
+    # not guaranteed, and the top of the hour is the busiest slot — an offset
+    # measurably reduces skipped runs. The corporate-action window is two hours
+    # wide (corpActionWindow = 7200), so this samples it a dozen times.
+    - cron: "2,12,22,32,42,52 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: corp-action-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The log is this job's only memory. restore-keys picks the most recently
+      # written entry with that prefix, so each run resumes from the previous.
+      - name: Restore the observation log
+        uses: actions/cache/restore@v4
+        with:
+          path: corp-action-watch.jsonl
+          key: corp-action-watch-${{ github.run_id }}
+          restore-keys: |
+            corp-action-watch-
+
+      - name: Poll the guard
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/watch-corp-action.mjs --only NVDA --once --quiet 2>&1 | tee poll.out
+
+      - name: Save the observation log
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: corp-action-watch.jsonl
+          key: corp-action-watch-${{ github.run_id }}
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          if [ -s poll.out ]; then
+            {
+              echo "## Something moved on NVDA"
+              echo
+              echo '```'
+              cat poll.out
+              echo '```'
+              echo
+              echo "Full record: the \`corp-action-watch.jsonl\` artifact on this run."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::corp-action watch detected a change — see the run summary"
+            exit 1
+          fi
+          echo "No change. state, multiplier, effectiveAt and oraclePaused all as before." >> "$GITHUB_STEP_SUMMARY"
+
+      # Only on a detection: the log stops being a rolling cache entry and
+      # becomes a downloadable, dated artifact worth citing.
+      - name: Keep the record
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corp-action-watch-${{ github.run_id }}
+          path: corp-action-watch.jsonl
+          retention-days: 90
+          if-no-files-found: warn
