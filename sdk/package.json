@@ -1,0 +1,45 @@
+{
+  "name": "@shareexact/sdk",
+  "version": "0.2.0",
+  "description": "Read Robinhood Chain Stock Tokens correctly: exact share units, ERC-8056 multipliers, and honest price staleness.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "robinhood-chain",
+    "erc-8056",
+    "chainlink",
+    "rwa",
+    "stock-tokens"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aa2hr/shareexact"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
