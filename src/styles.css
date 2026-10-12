@@ -1,0 +1,112 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-bg: #0b0c0b;
+  --color-background: #0b0c0b;
+  --color-surface: #141614;
+  --color-card: #171a17;
+  --color-foreground: #eef0ea;
+  --color-muted: #1c1f1c;
+  --color-muted-foreground: #8b9088;
+  --color-primary: #c5d4c8;
+  --color-primary-foreground: #0b0c0b;
+  --color-border: #2a2e2a;
+  --color-ring: #c5d4c8;
+  --color-up: #3d9a6a;
+  --color-down: #c45c4a;
+  --color-tape: #9aa394;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  html[dir="rtl"] body {
+    font-family: "IBM Plex Sans", "Tahoma", ui-sans-serif, sans-serif;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    min-height: 100dvh;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  * {
+    border-color: var(--color-border);
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.tape-wrap {
+  overflow: hidden;
+  direction: ltr;
+}
+.tape {
+  display: flex;
+  width: max-content;
+  animation: tape 48s linear infinite;
+  will-change: transform;
+}
+.tape-track {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2.5rem;
+  padding-inline-end: 2.5rem;
+  white-space: nowrap;
+}
+.tape:hover {
+  animation-play-state: paused;
+}
+@keyframes tape {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tape {
+    animation: none;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-foreground) 6%, transparent) 0%,
+    color-mix(in oklab, var(--color-foreground) 16%, transparent) 50%,
+    color-mix(in oklab, var(--color-foreground) 6%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
