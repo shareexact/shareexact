@@ -1,0 +1,25 @@
+{
+  "chainId": 46630,
+  "network": "Robinhood Chain testnet",
+  "deployedAt": "2026-09-16T18:05:44.335Z",
+  "commit": "1999474194bf8488021a6dd44b9c701d69080217",
+  "deployer": "0x589df831797e3891924397d7f99261a1cf70ce72",
+  "contracts": {
+    "ShareExactGuard": {
+      "address": "0x2dd1d4c1556d86c0dc98b6b5ef12b450c8d4c9d8",
+      "explorer": "https://explorer.testnet.chain.robinhood.com/address/0x2dd1d4c1556d86c0dc98b6b5ef12b450c8d4c9d8",
+      "verified": false
+    },
+    "ExactTransfer": {
+      "address": "0x8c726dc9d27902515f70596b7f07610f1bf4ecd2",
+      "guard": "0x2dd1d4c1556d86c0dc98b6b5ef12b450c8d4c9d8",
+      "explorer": "https://explorer.testnet.chain.robinhood.com/address/0x8c726dc9d27902515f70596b7f07610f1bf4ecd2",
+      "verified": false
+    }
+  },
+  "feeds": {
+    "note": "Symbol -> { feed, maxStaleness, decimals } as registered on the guard.",
+    "registered": {}
+  },
+  "proofTransactions": {}
+}

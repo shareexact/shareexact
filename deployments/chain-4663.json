@@ -1,0 +1,87 @@
+{
+  "chainId": 4663,
+  "network": "Robinhood Chain mainnet",
+  "deployedAt": "2026-09-25T18:30:29Z",
+  "commit": "f2f409dbcc3297c5d24b5e8d680020bc7370c746",
+  "deployer": "0x9D2A73430A5D4D8D6Bc1bDb1d376576f57CC9408",
+  "contracts": {
+    "ShareExactGuard": {
+      "address": "0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5",
+      "explorer": "https://robinhoodchain.blockscout.com/address/0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5",
+      "verified": true
+    },
+    "ExactTransfer": {
+      "address": "0x032f454686d19a4753e4fBE955f5E52e86DEA346",
+      "guard": "0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5",
+      "explorer": "https://robinhoodchain.blockscout.com/address/0x032f454686d19a4753e4fBE955f5E52e86DEA346",
+      "verified": true
+    }
+  },
+  "feeds": {
+    "note": "8 symbols registered on the guard (AAPL GOOGL INTC MSFT NVDA SLV SPY TSLA), covering the sample desk. The remaining 43 in feeds.generated.json are shown by the desk but report NO_FEED on-chain. Run npm run feeds:parity to see the gap; registering them is one transaction each and blocked by nothing but gas.",
+    "registered": {
+      "GOOGL": {
+        "feed": "0xF6f373a037c30F0e5010d854385cA89185AE638b",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3"
+      },
+      "SPY": {
+        "feed": "0x319724394D3A0e3669269846abE664Cd621f9f6A",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C"
+      },
+      "TSLA": {
+        "feed": "0x4A1166a659A55625345e9515b32adECea5547C38",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d"
+      },
+      "SLV": {
+        "feed": "0x209b73908e92Ae021826eD79609845451Ecba2ce",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f"
+      },
+      "INTC": {
+        "feed": "0x3f390C5C24628Ac7C489515402235FeAD71D1913",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681"
+      },
+      "AAPL": {
+        "feed": "0x6B22A786bAa607d76728168703a39Ea9C99f2cD0",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9"
+      },
+      "MSFT": {
+        "feed": "0x45C3C877C15E6BA2EBB19eA114Ea508d14C1Af2E",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0xe93237C50D904957Cf27E7B1133b510C669c2e74"
+      },
+      "NVDA": {
+        "feed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15",
+        "maxStaleness": 93600,
+        "decimals": 8,
+        "token": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
+      }
+    }
+  },
+  "deploymentTransactions": {
+    "block": 72442933,
+    "ShareExactGuard": "0xcdcc42c3a895ca4b28b868f56109b0419b442fd95b725102ddf62c04368a9802",
+    "ExactTransfer": "0xe655ea334aa814d8bac60dbfc670559fb9ea73062003f8269df3338a4ba9728e"
+  },
+  "handover": {
+    "status": "scheduled",
+    "pendingOwner": "0x1586de8B6eEBf195faC0f8604825dD331aA74d41",
+    "readyAt": "2026-09-26T19:08:35Z"
+  },
+  "proofTransactions": {
+    "note": "No ExactShareTransfer has been sent to this ExactTransfer. The hash below settled on the retired helper 0x507b0d8e8558e899af3b511b083f73dfe17168ab.",
+    "retiredExactShareTransfer": "0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03"
+  }
+}
