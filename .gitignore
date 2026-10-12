@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+sdk/node_modules/
+sdk/dist/
+
+# Build output
+.output/
+.vinxi/
+.tanstack/
+.vercel/
+dist/
+*.tsbuildinfo
+
+# Secrets. Nothing matching these ever belongs in a commit.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+keystore/
+
+# Foundry
+contracts/out/
+contracts/cache/
+
+contracts/broadcast/*/dry-run/
+
+# Local database
+*.db
+*.sqlite
+.pglite/
+pgdata/
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+rhfeeds.json
+contracts/*-input.json
+
+rhfeeds.json
+contracts/*-input.json
+
+rhfeeds.json
+contracts/*-input.json
+.vercel
+.env*
+corp-action-watch.jsonl
