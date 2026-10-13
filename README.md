@@ -206,7 +206,9 @@ sequencer uptime, and signed ERC-20 transfers computed from the live multiplier.
 
 Live exact send through the retired 20 Sep ExactTransfer `0x507b…68ab`:
 [0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03).
-The current helper, deployed 25 Sep 2026, has not yet moved a share.
+The current helper, deployed 25 Sep 2026, made its first guarded send on
+26 Sep 2026
+([`0x245e8968…dc2a30`](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30)).
 
 Prior deployment (17 Sep 2026, retired), 0.002 UI shares →
 0.001998450882483378 raw at multiplier `1.000775159164630595`:
