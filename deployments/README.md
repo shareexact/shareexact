@@ -9,11 +9,12 @@ This directory is the single place addresses live. It is not empty.
 | ShareExactGuard | [`0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5`](https://robinhoodchain.blockscout.com/address/0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5) |
 | ExactTransfer | [`0x032f454686d19a4753e4fBE955f5E52e86DEA346`](https://robinhoodchain.blockscout.com/address/0x032f454686d19a4753e4fBE955f5E52e86DEA346) |
 | Feeds on the guard | 8, verified against `description()`: AAPL GOOGL INTC MSFT NVDA SLV SPY TSLA |
-| Share-transfer proof | none on this ExactTransfer. [`0x3790392a…68e6b03`](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03) settled on the retired 20 Sep helper `0x507b…68ab` |
+| Share-transfer proof | [`0x245e8968…dc2a30`](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30) — guarded send through `transferShares`, 26 Sep 2026, block 73414480. The older [`0x3790392a…68e6b03`](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03) settled on the retired helper `0x507b…68ab` |
 | Rehearsal | [`chain-46630.json`](./chain-46630.json) on testnet |
 
-`npm run deploy:verify` runs 16 checks against live chain state. That is the
-proof, not this paragraph.
+`npm run deploy:verify` checks live chain state, including the recorded owner
+and that no ownership transfer is pending. The script prints how many checks
+ran. That is the proof, not this paragraph.
 
 `"verified": true` in the JSON is a claim about something a reviewer can check
 in one click on the explorer. Set it only after the click works.

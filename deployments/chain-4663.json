@@ -76,12 +76,19 @@
     "ExactTransfer": "0xe655ea334aa814d8bac60dbfc670559fb9ea73062003f8269df3338a4ba9728e"
   },
   "handover": {
-    "status": "scheduled",
-    "pendingOwner": "0x1586de8B6eEBf195faC0f8604825dD331aA74d41",
-    "readyAt": "2026-09-26T19:08:35Z"
+    "status": "accepted",
+    "owner": "0x1586de8B6eEBf195faC0f8604825dD331aA74d41",
+    "pendingOwner": "0x0000000000000000000000000000000000000000"
   },
   "proofTransactions": {
-    "note": "No ExactShareTransfer has been sent to this ExactTransfer. The hash below settled on the retired helper 0x507b0d8e8558e899af3b511b083f73dfe17168ab.",
+    "exactShareTransfer": "0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30",
+    "note": "Guarded send through transferShares on this ExactTransfer, 26 Sep 2026, block 73414480. 0.002 UI shares requested, 0.001998450882483378 raw moved at multiplier 1.000775159164630595, 0.001999999999999999 shares delivered, 1 wei shortfall accepted.",
     "retiredExactShareTransfer": "0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03"
+  },
+  "governance": {
+    "kind": "timelock",
+    "owner": "0x1586de8B6eEBf195faC0f8604825dD331aA74d41",
+    "minDelaySeconds": 86400,
+    "proposers": []
   }
 }

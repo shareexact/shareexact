@@ -13,10 +13,15 @@ current ExactTransfer `0x032f454686d19a4753e4fBE955f5E52e86DEA346`.
 `ExactTransfer` calls `unitChangeImminent` instead of reading the unit off
 `state()`. The window cannot be set below 10 minutes. A dirty `uint80` does
 not revert observation. Addresses in `deployments/chain-4663.json`. Eight
-Chainlink feeds are registered on this guard. The owner is still the deploying
-EOA. A timelock is `pendingOwner` and has not accepted. Runbook: `docs/DEPLOY.md`
-**Proof of this deployment:** the deploy transactions in the record. No
-`ExactShareTransfer` has been sent to `0x032f…A346` yet.
+Chainlink feeds are registered on this guard. `owner()` is the timelock
+`0x1586de8B6eEBf195faC0f8604825dD331aA74d41` and `pendingOwner` is zero.
+Runbook: `docs/DEPLOY.md`
+**Proof of this deployment:**
+[`0x245e8968…dc2a30`](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30)
+— a guarded send through `transferShares` on `0x032f…A346`, 26 Sep 2026,
+block 73414480. 0.002 UI shares requested; 0.001998450882483378 raw moved at
+multiplier 1.000775159164630595, delivering 0.001999999999999999 shares. The
+1 wei shortfall was accepted explicitly rather than rounded away.
 
 Prior deployment's proof transactions (retired guard `0x2dd1d4c1…`, replaced 20 Sep 2026 for the fix below):
 [`0x7a6daf6d…1ada29`](https://robinhoodchain.blockscout.com/tx/0x7a6daf6d88386096d3b1d63bb46903782a78669200f24378098cfdb9be1ada29),
@@ -50,8 +55,8 @@ whenever the feed was stale or paused. `ExactTransfer` now calls
 `unitChangeImminent`, which reads the token and not the feed registry. The
 window has a floor of 10 minutes. Observation loads round words directly.
 Covered by `contracts/test/Hardening.t.sol`. Deployed in block 72442933 by
-`0x9D2A73430A5D4D8D6Bc1bDb1d376576f57CC9408`. No share has moved through this
-ExactTransfer.
+`0x9D2A73430A5D4D8D6Bc1bDb1d376576f57CC9408`. The guarded send on this
+ExactTransfer is `0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30`.
 
 ## The problem, with a number
 

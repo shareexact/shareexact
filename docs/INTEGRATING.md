@@ -113,10 +113,9 @@ What the owner **can** do, inside those bounds:
 Widening the live 7200s window, up to 7 days, is one lever. Narrowing it to
 10 minutes is another. Neither is "the owner cannot block you". A sequencer
 feed that reports down blocks transfers with no corporate action pending. The
-owner today is still the deployer EOA `0x9D2A73430A5D4D8D6Bc1bDb1d376576f57CC9408`.
-`pendingOwner` is the timelock `0x1586de8B6eEBf195faC0f8604825dD331aA74d41`.
-It cannot accept before 2026-09-26 19:08:35 UTC. Until `acceptOwnership` lands,
-the EOA can still change feeds and the window.
+owner is the timelock `0x1586de8B6eEBf195faC0f8604825dD331aA74d41`. `pendingOwner`
+is zero. `getMinDelay()` is 86400 seconds. A config change is public for 24
+hours before it can land.
 
 Ownership is two-step (`transferOwnership` / `acceptOwnership`).
 
@@ -211,11 +210,11 @@ states, not a recommendation for your liquidation path.
 
 | | |
 | --- | --- |
-| Guard owner | deployer EOA `0x9D2A…9408`. Timelock is `pendingOwner`, not accepted |
+| Guard owner | timelock `0x1586de8B6eEBf195faC0f8604825dD331aA74d41`. `pendingOwner` is zero |
 | Upgradeability | none |
 | Tests | 87 Foundry, 0 failed, including the adversarial and hardening suites |
 | Audit | none. Reviewed twice externally; both rounds are in `docs/SECURITY.md` |
 
-The owner key is the thing to weigh. Until the timelock accepts, the answer is
-still an EOA. Weigh it accordingly, or take the `multiplierOf` path above,
-which does not depend on it.
+The owner is the timelock above, not the deployer EOA. A config change waits
+out `getMinDelay()`. The `multiplierOf` path above still does not depend on
+the owner.

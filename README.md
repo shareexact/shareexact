@@ -1,6 +1,6 @@
 # ShareExact
 
-[![CI](https://github.com/aa2hr/shareexact/actions/workflows/ci.yml/badge.svg)](https://github.com/aa2hr/shareexact/actions/workflows/ci.yml)
+[![CI](https://github.com/shareexact/shareexact/actions/workflows/ci.yml/badge.svg)](https://github.com/shareexact/shareexact/actions/workflows/ci.yml)
 
 ## Demo
 
@@ -50,7 +50,7 @@ and a desk that refuses to show a number it cannot source.
 | ShareExactGuard | [`0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5`](https://robinhoodchain.blockscout.com/address/0xa1042D6bE795d475E5ffe7A333d04e364CBf9da5) |
 | ExactTransfer | [`0x032f454686d19a4753e4fBE955f5E52e86DEA346`](https://robinhoodchain.blockscout.com/address/0x032f454686d19a4753e4fBE955f5E52e86DEA346) |
 | Deployed | 25 Sep 2026, 18:30 UTC, block 72442933, by `0x9D2A…9408` |
-| Share-transfer proof | none on this ExactTransfer. The 20 Sep proof below hit the retired helper |
+| Share-transfer proof | [`0x245e8968…dc2a30`](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30) — guarded send through `transferShares`, 26 Sep 2026, block 73414480 |
 | Video demo tx | [`0x1e8e80f3…9569f3`](https://robinhoodchain.blockscout.com/tx/0x1e8e80f32b847899f02d2c1ac4fdf2eee44bb28583a4372fd00eb23c499569f3) |
 | Record | [`deployments/chain-4663.json`](deployments/chain-4663.json) |
 | Chain | Robinhood Chain mainnet, 4663 |
@@ -61,20 +61,23 @@ Both contracts are on Robinhood Chain mainnet, 4663, redeployed 25 Sep 2026.
 `state()`, so a stale or paused feed no longer hides a scheduled multiplier
 change. The corporate-action window cannot be set below 10 minutes. Round words
 are loaded directly, so a dirty `uint80` does not revert `state()`. The eight
-feeds were registered on this guard. The owner is still the deploying EOA.
-`pendingOwner` is a timelock and has not accepted. That acceptance is not done
-until `owner()` is the timelock and `pendingOwner` is zero.
+feeds were registered on this guard. `owner()` is the timelock
+`0x1586de8B6eEBf195faC0f8604825dD331aA74d41` and `pendingOwner` is zero.
 
-The 20 Sep proof, [`0x3790392a…68e6b03`](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03),
-moved shares through the retired ExactTransfer `0x507b…68ab`. No
-`ExactShareTransfer` has been sent to `0x032f…A346`. Do not cite the older hash
-as proof of this deployment. `npm run deploy:verify` checks the bytecode's
-wiring and the eight feeds. It does not check a share transfer.
+The guarded send on this deployment is
+[`0x245e8968…dc2a30`](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30)
+(26 Sep 2026, block 73414480): 0.002 UI shares requested, 0.001998450882483378
+raw moved at multiplier 1.000775159164630595, 0.001999999999999999 shares
+delivered, and the 1 wei shortfall accepted explicitly rather than rounded away.
+The older [`0x3790392a…68e6b03`](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03)
+settled on the retired helper `0x507b…68ab`; cite the first hash, not the second.
+`npm run deploy:verify` checks the bytecode's wiring, the owner and the eight feeds.
+It does not check a share transfer.
 
 None of that has to be taken on trust:
 
 ```bash
-npm run deploy:verify    # 16 checks against live chain state
+npm run deploy:verify    # wiring, owner, feeds, live chain state
 npm run feeds:parity     # does the desk agree with the guard about every feed
 ```
 

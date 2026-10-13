@@ -37,7 +37,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/aa2hr/shareexact"
+    "url": "https://github.com/shareexact/shareexact"
   },
   "engines": {
     "node": ">=18"
