@@ -126,18 +126,122 @@ source tab shows verified code, and flip `"verified": true` in the JSON. That
 field is a claim about something a reviewer can check in one click, so it should
 never be true before the click works.
 
-### Ownership
+### Small transactions need a bigger gas limit than Foundry estimates
 
-For the hackathon the deploying EOA as owner is defensible and the verifier
-prints a note when it sees one. Before anyone lends against this, move it:
+Learned on testnet on 25 Sep, which is the only reason it was not learned on
+mainnet after a 24-hour wait.
+
+Chain 4663 is an Arbitrum L2: part of every transaction's gas pays for L1 data,
+and that fixed component is charged from the transaction's own gas limit. On a
+call needing only ~45k of L2 execution it is a large share of the total, and
+Foundry's default estimate does not cover it.
+
+The rehearsal's `execute` was sent with a 62,507 limit, consumed all 62,507 and
+reverted — `gasUsed == gasLimit`, the signature of running out. Replaying it
+with `cast run` succeeded using 45,255, which proved the logic was fine and only
+the limit was wrong. Re-sent with a larger limit it went through. The mainnet
+`execute` later used **45,255** — the number the replay had predicted exactly.
+
+Deploys carry enough slack to survive the default. Small calls do not:
 
 ```bash
-cast send <GUARD> "transferOwnership(address)" <MULTISIG> --private-key $PRIVATE_KEY
-# then, from the multisig
-cast send <GUARD> "acceptOwnership()"
+--gas-limit 300000                 # cast send
+--gas-estimate-multiplier 400      # forge script
 ```
 
-Two-step on purpose: a typo in the address cannot orphan the contract.
+on `transferOwnership`, on `schedule`, on `execute`, and on anything else under
+a few hundred thousand gas. Unused gas is refunded, so the margin costs nothing.
+
+A failure of this kind loses nothing. A reverted `execute` leaves the timelock
+operation still scheduled and still ready, because `_afterCall` never ran. Check
+`isOperationReady` and send it again.
+
+### Ownership
+
+On Robinhood Chain mainnet this move is already done. `owner()` is the timelock
+`0x1586de8B6eEBf195faC0f8604825dD331aA74d41` as of
+[`0x40be6a34…229cd1`](https://robinhoodchain.blockscout.com/tx/0x40be6a3424371ee120bc8e291c905a2c1d956f2653e9bac45b293567df229cd1)
+(2026-09-26 20:18:21 UTC, block 73363250). `pendingOwner` is zero. The proposer
+is the Safe `0x588BbB3A33E61F081CFa2423FF507682450Ef3aC`.
+
+For a later deployment the verifier prints a note while the owner is still the
+deploying EOA. Before anyone lends against that deployment, move it. The target
+is a `TimelockController` proposed to by a Safe, not a bare multisig: a solo
+operator cannot honestly claim the multisig half, and the half an integrator
+actually needs is not "nobody can change the config" but "nobody can change it
+without you seeing it first".
+
+**Register the feeds first.** `Deploy.s.sol` registers them only when
+`owner == deployer`, and once the timelock owns the guard every `setFeed`
+becomes a scheduled operation that waits out the full delay. Doing this in the
+wrong order turns eight cheap transactions into eight 24-hour waits.
+
+```bash
+# 1. the timelock, with the Safe as proposer
+export TIMELOCK_DELAY=86400
+export TIMELOCK_PROPOSERS=<SAFE>
+forge script script/DeployTimelock.s.sol --rpc-url robinhood --broadcast --verify
+
+# 2. guard + ExactTransfer, owned by the EOA.
+#    Feeds are registered in this broadcast only when FEED_TOKENS and
+#    FEED_ADDRESSES are both set and GUARD_OWNER is the deployer.
+#    With neither variable set, this command registers nothing. Do section 3
+#    before step 3 if you still need them.
+forge script script/Deploy.s.sol --rpc-url robinhood --broadcast --verify
+
+# 3. point ownership at the timelock. Reversible: owner does not move yet
+export GUARD=<GUARD>
+export TIMELOCK=<TIMELOCK>
+forge script script/Handover.s.sol --sig "transfer()" \
+  --rpc-url robinhood --broadcast --gas-estimate-multiplier 400
+
+# 4. calldata for the Safe to schedule acceptOwnership()
+forge script script/Handover.s.sol --sig "calldata_()" --rpc-url robinhood
+```
+
+Step 4 produces the hex for the Safe's Transaction Builder in **Custom data**
+mode: `To` is the timelock, value 0. The Safe cannot `cast send`, and it cannot
+call `acceptOwnership()` directly — the timelock is the pending owner, so the
+timelock is what must make that call, and it will only make it after the delay.
+
+Before collecting signatures, simulate it. A `0x` return means it will not
+revert. The predecessor is `bytes32(0)`, written out in full so it can be
+copied:
+
+```bash
+cast call <TIMELOCK> "schedule(address,uint256,bytes,bytes32,bytes32,uint256)" \
+  <GUARD> 0 0x79ba5097 \
+  0x0000000000000000000000000000000000000000000000000000000000000000 \
+  <SALT> 86400 --from <SAFE> --rpc-url robinhood
+```
+
+After the delay anyone may execute — executors are open, so a lost proposer key
+cannot strand an already-public change:
+
+```bash
+cast send <TIMELOCK> "execute(address,uint256,bytes,bytes32,bytes32)" \
+  <GUARD> 0 0x79ba5097 \
+  0x0000000000000000000000000000000000000000000000000000000000000000 \
+  <SALT> --gas-limit 300000 \
+  --rpc-url robinhood --private-key $PRIVATE_KEY
+
+forge script script/Handover.s.sol --sig "confirm()" --rpc-url robinhood
+```
+
+`confirm()` reverts unless `owner == timelock` and `pendingOwner == 0`.
+
+Two-step ownership on purpose: `owner` does not move until `acceptOwnership()`
+succeeds, so a wrong address in step 3 is recoverable — point it elsewhere and
+try again. The unrecoverable mistake is completing a handover to a timelock with
+no working proposer, which freezes configuration for good. Rehearse the whole
+chain on testnet first; the ceremony is pinned in
+`contracts/test/Handover.t.sol` and has been walked end to end on 46630 and 4663.
+
+Record the result so `deploy:verify` can check it, using the `governance` block
+in `deployments/chain-4663.json`. Without it the verifier skips the governance
+checks entirely and still reports every other check green — a wrong owner, a
+half-finished transfer, a shortened delay, or a proposer that has lost its role
+would all pass unnoticed.
 
 ---
 

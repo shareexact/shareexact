@@ -5,6 +5,7 @@ import {
   classifyDataState,
   isShareConversionExecutable,
   readStockToken,
+  unitChangeImminent,
   type CallFn,
   type DataState,
 } from "./index.ts";
@@ -61,10 +62,47 @@ test("a feed timestamp in the future is stale, not maximally fresh", () => {
   assert.equal(classify({ updatedAt: NOW + 3600 }), "STALE");
 });
 
-test("share conversion survives STALE and is blocked by CORP_ACTION", () => {
-  assert.equal(isShareConversionExecutable("STALE"), true);
-  assert.equal(isShareConversionExecutable("CORP_ACTION"), false);
-  assert.equal(isShareConversionExecutable("SEQUENCER_DOWN"), false);
+test("STALE does not mean the unit is stable", () => {
+  const weekend = {
+    sequencerOk: true,
+    hasFeed: true,
+    updatedAt: NOW - 50 * 3600,
+    price: 178.4,
+    now: NOW,
+    maxStaleness: 26 * 3600,
+    oraclePaused: false,
+    effectiveAt: null as number | null,
+    multiplier: WAD,
+    pendingMultiplier: WAD,
+    corpActionWindow: 7200,
+  };
+  assert.equal(classify(weekend), "STALE");
+  assert.equal(unitChangeImminent(weekend), false);
+  assert.equal(
+    isShareConversionExecutable({ dataState: "STALE", unitChangeImminent: false, multiplier: WAD }),
+    true,
+  );
+
+  const staleSplit = {
+    ...weekend,
+    effectiveAt: NOW + 1800,
+    pendingMultiplier: 4n * WAD,
+  };
+  assert.equal(classify(staleSplit), "STALE");
+  assert.equal(unitChangeImminent(staleSplit), true);
+  assert.equal(
+    isShareConversionExecutable({ dataState: "STALE", unitChangeImminent: true, multiplier: WAD }),
+    false,
+  );
+  assert.equal(isShareConversionExecutable({ dataState: "CORP_ACTION", unitChangeImminent: true, multiplier: WAD }), false);
+  assert.equal(
+    isShareConversionExecutable({ dataState: "SEQUENCER_DOWN", unitChangeImminent: false, multiplier: WAD }),
+    false,
+  );
+  assert.equal(
+    isShareConversionExecutable({ dataState: "ORACLE_PAUSED", unitChangeImminent: true, multiplier: WAD }),
+    false,
+  );
 });
 
 function mockCall(map: Record<string, string | null>): CallFn {
@@ -146,4 +184,83 @@ test("future feed timestamp classifies as STALE through readStockToken", async (
   });
   const state = await readStockToken(call, TOKEN, { feed: FEED, now: NOW });
   assert.equal(state.dataState, "STALE");
+});
+
+test("a token whose ratio cannot be read is not executable, whatever the label says", () => {
+  // `multiplier: 0n` is "uiMultiplier() could not be read". The contract refuses
+  // such a token outright — `transferShares` reverts with `UnitUnavailable` —
+  // so the predicate that exists to predict the contract has to refuse too.
+  // Before this, FRESH with nothing pending and an unreadable ratio returned
+  // true, which is the one answer that gets a caller to sign.
+  for (const dataState of ["FRESH", "STALE", "ORACLE_PAUSED", "NO_FEED"] as const) {
+    assert.equal(
+      isShareConversionExecutable({ dataState, unitChangeImminent: false, multiplier: 0n }),
+      false,
+      `${dataState} with an unreadable ratio must not be executable`,
+    );
+  }
+  assert.equal(
+    isShareConversionExecutable({ dataState: "FRESH", unitChangeImminent: false, multiplier: WAD }),
+    true,
+  );
+});
+
+test("omitting the ratio refuses rather than passes", () => {
+  // TypeScript requires the field; JavaScript does not. An integration written
+  // against the older two-field shape must fail closed instead of keeping the
+  // bug it was written around.
+  const legacy = { dataState: "FRESH", unitChangeImminent: false } as unknown as Parameters<
+    typeof isShareConversionExecutable
+  >[0];
+  assert.equal(isShareConversionExecutable(legacy), false);
+});
+
+/*//////////////////////////////////////////////////////////////
+                    ARGUMENTS ARE NOT TRUSTED
+//////////////////////////////////////////////////////////////*/
+
+test("a non-finite duration is refused instead of silently disabling the check", async () => {
+  // This is the whole point: `now - updatedAt > NaN` is false, so a feed that
+  // has not published in a week would have come back FRESH, with no error and
+  // nothing in the logs. The library would have been confidently wrong about
+  // the one thing it exists to be right about.
+  const call = mockCall({});
+  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+    await assert.rejects(
+      () => readStockToken(call, TOKEN, { maxStaleness: bad }),
+      /maxStaleness/,
+      `maxStaleness ${bad} must be refused`,
+    );
+    await assert.rejects(
+      () => readStockToken(call, TOKEN, { corpActionWindow: bad }),
+      /corpActionWindow/,
+      `corpActionWindow ${bad} must be refused`,
+    );
+    await assert.rejects(() => readStockToken(call, TOKEN, { now: bad }), /now/);
+  }
+  await assert.rejects(
+    () => readStockToken(call, TOKEN, { maxStaleness: "3600" as unknown as number }),
+    /maxStaleness/,
+  );
+});
+
+test("arguments are checked before any call is made", async () => {
+  // A bad argument must not cost an RPC round trip, and must not half-read a
+  // token and then throw.
+  let calls = 0;
+  const counting: CallFn = async () => {
+    calls += 1;
+    return null;
+  };
+  await assert.rejects(() => readStockToken(counting, TOKEN, { maxStaleness: Number.NaN }));
+  assert.equal(calls, 0);
+});
+
+test("the ordinary durations still pass", async () => {
+  const state = await readStockToken(mockCall({}), TOKEN, {
+    maxStaleness: 93_600,
+    corpActionWindow: 0,
+    now: 1_790_000_000,
+  });
+  assert.equal(state.dataState, "NO_FEED");
 });

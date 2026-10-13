@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   SELECTORS,
+  TOPICS,
   decodeBool,
+  decodeErc20Transfer,
+  decodeExactShareTransfer,
   decodeRoundData,
   decodeUint,
   encodeBalanceOf,
@@ -73,4 +76,83 @@ test("latestRoundData decodes a negative answer correctly", () => {
 test("chainlink answers scale by feed decimals", () => {
   assert.equal(scaleAnswer(17_840_000_000n, 8), 178.4);
   assert.equal(scaleAnswer(100_000_000n, 8), 1);
+});
+
+/*//////////////////////////////////////////////////////////////
+                             LOGS
+//////////////////////////////////////////////////////////////*/
+
+const WAD = 10n ** 18n;
+const TOKEN = "0x1111111111111111111111111111111111111111";
+const FROM = "0x2222222222222222222222222222222222222222";
+const TO = "0x3333333333333333333333333333333333333333";
+
+const topic = (address: string) =>
+  `0x${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
+const blob = (...values: bigint[]) =>
+  `0x${values.map((v) => v.toString(16).padStart(64, "0")).join("")}`;
+
+/**
+ * The ERC-20 `Transfer` topic is public knowledge and appears on every explorer
+ * page. Pinning it proves the topic table came out of a real keccak run rather
+ * than being typed from memory — the same argument as the selectors above, and
+ * it matters more here, because a wrong topic would not fail loudly: the desk
+ * would simply never find the log and would report every transfer as pending.
+ */
+test("the well-known event topic matches", () => {
+  assert.equal(
+    TOPICS.transfer,
+    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+  );
+  assert.match(TOPICS.exactShareTransfer, /^0x[0-9a-f]{64}$/);
+});
+
+test("ExactShareTransfer decodes to the eight values the contract emitted", () => {
+  const event = decodeExactShareTransfer({
+    address: "0x4444444444444444444444444444444444444444",
+    topics: [TOPICS.exactShareTransfer, topic(TOKEN), topic(FROM), topic(TO)],
+    data: blob(WAD, WAD - 3n, WAD / 4n, 4n * WAD, 5n),
+  });
+  assert.ok(event);
+  assert.equal(event.token, TOKEN);
+  assert.equal(event.from, FROM);
+  assert.equal(event.to, TO);
+  assert.equal(event.uiShares, WAD);
+  assert.equal(event.deliveredShares, WAD - 3n);
+  assert.equal(event.raw, WAD / 4n);
+  assert.equal(event.multiplier, 4n * WAD);
+  assert.equal(event.maxShortfall, 5n);
+});
+
+test("a log that is not ours decodes to null rather than to zeroes", () => {
+  // Returning a zero-filled event for an unrecognised log would let the desk
+  // print "0 shares delivered" over a transaction it never read.
+  assert.equal(
+    decodeExactShareTransfer({
+      topics: [TOPICS.transfer, topic(FROM), topic(TO)],
+      data: blob(WAD),
+    }),
+    null,
+  );
+  assert.equal(
+    decodeExactShareTransfer({
+      topics: [TOPICS.exactShareTransfer, topic(TOKEN), topic(FROM), topic(TO)],
+      data: blob(WAD, WAD, WAD), // three words where five are required
+    }),
+    null,
+  );
+  assert.equal(decodeExactShareTransfer({ topics: [], data: "0x" }), null);
+});
+
+test("an ERC-20 Transfer yields the raw value and the two parties", () => {
+  const event = decodeErc20Transfer({
+    address: TOKEN,
+    topics: [TOPICS.transfer, topic(FROM), topic(TO)],
+    data: blob(WAD / 4n),
+  });
+  assert.ok(event);
+  assert.equal(event.from, FROM);
+  assert.equal(event.to, TO);
+  assert.equal(event.value, WAD / 4n);
+  assert.equal(decodeErc20Transfer({ topics: [TOPICS.exactShareTransfer], data: "0x" }), null);
 });

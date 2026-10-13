@@ -60,7 +60,7 @@ export function classifyDataState(input: ClassifyInput): DataState {
   //    multiplier, not the price, so a pending split is CORP_ACTION even when
   //    no aggregator is registered.
   if (!input.hasFeed) {
-    if (corpActionImminent(input)) return "CORP_ACTION";
+    if (unitChangeImminent(input)) return "CORP_ACTION";
     return "NO_FEED";
   }
 
@@ -78,12 +78,12 @@ export function classifyDataState(input: ClassifyInput): DataState {
   if (input.oraclePaused) return "ORACLE_PAUSED";
 
   // 6. Imminent corporate action. A scheduled no-op does not count.
-  if (corpActionImminent(input)) return "CORP_ACTION";
+  if (unitChangeImminent(input)) return "CORP_ACTION";
 
   return "FRESH";
 }
 
-function corpActionImminent(input: ClassifyInput): boolean {
+export function unitChangeImminent(input: ClassifyInput): boolean {
   // Same order as ShareExactGuard._corpActionImminent. An unreadable pending
   // multiplier fails closed for any future effectiveAt, before the window.
   // The window applies only once both multipliers can be compared.
@@ -101,12 +101,29 @@ export function isTradeable(state: DataState): boolean {
 }
 
 /**
- * True when unit conversion (shares <-> raw) can be executed, which is a weaker
- * bar than pricing. Named for what it checks: it says nothing about whether the
- * transfer is economically or legally advisable.
+ * True when a share conversion may be sent.
+ *
+ * `STALE` by itself does not block. `STALE` together with a scheduled unit
+ * change does, and the label hides that second fact, so it is passed in.
+ *
+ * The third input is the ratio itself. A token whose `uiMultiplier()` cannot be
+ * read comes back as `0n`, `unitChangeImminent` is false for it, and the label
+ * can be anything — so without this check the predicate answered "executable"
+ * about a token `ExactTransfer.transferShares` refuses outright with
+ * `UnitUnavailable`. Fail closed here for the same reason the contract and the
+ * preflight do: an unreadable ratio is not evidence of a 1:1 token.
  */
-export function isShareConversionExecutable(state: DataState): boolean {
-  return state !== "CORP_ACTION" && state !== "SEQUENCER_DOWN";
+export function isShareConversionExecutable(input: {
+  dataState: DataState;
+  unitChangeImminent: boolean;
+  /** Current ratio, 18-decimal fixed point. Zero means it could not be read. */
+  multiplier: bigint;
+}): boolean {
+  if (input.dataState === "SEQUENCER_DOWN" || input.dataState === "CORP_ACTION") return false;
+  // A positive test, so an omitted field (a JavaScript caller written against
+  // the older two-field shape) refuses rather than passes.
+  if (!(input.multiplier > 0n)) return false;
+  return !input.unitChangeImminent;
 }
 
 /** @deprecated Too broad a name. Use `isShareConversionExecutable`. */

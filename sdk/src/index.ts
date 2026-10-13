@@ -52,6 +52,11 @@ export interface StockTokenState {
   priceUpdatedAt: number | null;
   ageSeconds: number | null;
   dataState: DataState;
+  /**
+   * Scheduled unit change, asked on its own. `dataState` can be `STALE` or
+   * `ORACLE_PAUSED` while this is true. Do not infer it from the label.
+   */
+  unitChangeImminent: boolean;
 }
 
 export interface ReadOptions {
@@ -120,6 +125,35 @@ function normaliseFeedDecimals(value: number | undefined): number {
 }
 
 /**
+ * Every seconds argument is checked, because every way they can be wrong is
+ * silent.
+ *
+ * `maxStaleness: NaN` makes `now - updatedAt > NaN` false, so a feed that has
+ * not published in a week comes back `FRESH`. `corpActionWindow: NaN` makes
+ * `effectiveAt - now <= NaN` false, so a split scheduled for ten minutes from
+ * now is never reported. Neither throws, neither logs, and both turn this
+ * library into the thing it exists to prevent — a confident answer about a
+ * number nobody checked.
+ *
+ * `NaN` is not hypothetical: it is what `Number(undefined)`,
+ * `parseInt("")` and a missing field in a parsed config all produce, and each
+ * of those is one keystroke away in an integration.
+ *
+ * This throws rather than clamping. An out-of-range duration is a programming
+ * error in the caller, and the one thing worse than crashing on it is quietly
+ * substituting a value the caller did not choose and will never see.
+ */
+function requireSeconds(name: string, value: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${name} must be a finite number of seconds`);
+  }
+  if (value < 0) {
+    throw new Error(`${name} must not be negative`);
+  }
+  return value;
+}
+
+/**
  * The interface promises to accept "anything that can answer an eth_call", so a
  * caller-supplied function that throws is a legal input, not a bug. Wrapping it
  * here is what makes the never-throws claim on `readStockToken` actually true —
@@ -149,7 +183,7 @@ export function classifyDataState(input: {
 }): DataState {
   if (!input.sequencerOk) return "SEQUENCER_DOWN";
   if (!input.hasFeed) {
-    if (corpActionImminent(input)) return "CORP_ACTION";
+    if (unitChangeImminent(input)) return "CORP_ACTION";
     return "NO_FEED";
   }
   if (input.price === null || input.price <= 0 || !input.updatedAt) return "STALE";
@@ -158,11 +192,11 @@ export function classifyDataState(input: {
   if (input.updatedAt > input.now) return "STALE";
   if (input.now > input.updatedAt && input.now - input.updatedAt > input.maxStaleness) return "STALE";
   if (input.oraclePaused) return "ORACLE_PAUSED";
-  if (corpActionImminent(input)) return "CORP_ACTION";
+  if (unitChangeImminent(input)) return "CORP_ACTION";
   return "FRESH";
 }
 
-function corpActionImminent(input: Parameters<typeof classifyDataState>[0]): boolean {
+export function unitChangeImminent(input: Parameters<typeof classifyDataState>[0]): boolean {
   // Same order as ShareExactGuard._corpActionImminent. An unreadable pending
   // multiplier fails closed for any future effectiveAt, before the window.
   if (input.effectiveAt == null || input.effectiveAt <= input.now) return false;
@@ -175,18 +209,24 @@ function corpActionImminent(input: Parameters<typeof classifyDataState>[0]): boo
  * Read everything about one Stock Token in five calls.
  *
  * Does not throw on a failed or throwing `CallFn`; every read degrades to null
- * and is reflected in `dataState`. It does throw on invalid arguments, which is
- * a programming error rather than a network condition.
+ * and is reflected in `dataState`. It does throw on invalid arguments —
+ * `feedDecimals`, `maxStaleness`, `corpActionWindow` and `now` are all checked
+ * before any call is made — because those are programming errors in the caller
+ * rather than network conditions, and a library that silently repaired them
+ * would be answering a question nobody asked.
  */
 export async function readStockToken(
   call: CallFn,
   token: string,
   options: ReadOptions = {},
 ): Promise<StockTokenState> {
-  const maxStaleness = options.maxStaleness ?? 26 * 60 * 60;
-  const corpActionWindow = options.corpActionWindow ?? 2 * 60 * 60;
+  const maxStaleness = requireSeconds("maxStaleness", options.maxStaleness ?? 26 * 60 * 60);
+  const corpActionWindow = requireSeconds(
+    "corpActionWindow",
+    options.corpActionWindow ?? 2 * 60 * 60,
+  );
   const feedDecimals = normaliseFeedDecimals(options.feedDecimals);
-  const now = options.now ?? Math.floor(Date.now() / 1000);
+  const now = requireSeconds("now", options.now ?? Math.floor(Date.now() / 1000));
 
   const [multiplierHex, pendingHex, effectiveHex, pausedHex, roundHex] = await Promise.all([
     safeCall(call, token, SELECTORS.uiMultiplier),
@@ -223,6 +263,20 @@ export async function readStockToken(
     if (updated !== null && updated > 0n) priceUpdatedAt = Number(updated);
   }
 
+  const moving = unitChangeImminent({
+    sequencerOk: options.sequencerOk ?? true,
+    hasFeed: Boolean(options.feed),
+    price,
+    updatedAt: priceUpdatedAt,
+    now,
+    maxStaleness,
+    oraclePaused,
+    effectiveAt,
+    multiplier,
+    pendingMultiplier,
+    corpActionWindow,
+  });
+
   const dataState = classifyDataState({
     sequencerOk: options.sequencerOk ?? true,
     hasFeed: Boolean(options.feed),
@@ -247,6 +301,7 @@ export async function readStockToken(
     priceUpdatedAt,
     ageSeconds: priceUpdatedAt ? Math.max(0, now - priceUpdatedAt) : null,
     dataState,
+    unitChangeImminent: moving,
   };
 }
 
@@ -254,17 +309,42 @@ export async function readStockToken(
 export const isPriceable = (state: DataState): boolean => state === "FRESH";
 
 /**
- * True when share <-> raw conversion can be executed. A weaker bar than pricing
- * on purpose: moving shares needs the multiplier, not the price, so a weekend
- * transfer is fine while a pending split is not.
+ * True when a share conversion may be sent.
  *
- * Named for what it actually checks. The earlier name, `isTransferSafe`, implied
- * a judgement about whether transferring is a good idea — which depends on
- * price, liquidity, issuer status, compliance and asset-specific trading
- * capability, none of which this function looks at.
+ * Three things have to hold, and each has been got wrong at least once:
+ *
+ *   - the chain has to be live, which is what `SEQUENCER_DOWN` means;
+ *   - no unit change may be about to land — and `dataState` will not show one
+ *     while the feed is `STALE` or the issuer has paused the oracle, because a
+ *     single-valued label has to pick an answer and price outranks unit inside
+ *     it. Passing only the label is how a pending split was once reported as
+ *     executable;
+ *   - and the ratio has to be readable at all.
+ *
+ * The third is why `multiplier` is here. A token whose `uiMultiplier()` cannot
+ * be read comes back as `0n`, `unitChangeImminent` is false for it, and the
+ * label can be anything — so without this check the predicate answered
+ * "executable" about a token the contract refuses outright:
+ * `ExactTransfer.transferShares` reverts with `UnitUnavailable`. A predicate
+ * that disagrees with the contract it exists to predict is worse than no
+ * predicate, because it gets believed.
+ *
+ * `StockTokenState` already has this shape, so pass the token read in whole.
  */
-export const isShareConversionExecutable = (state: DataState): boolean =>
-  state !== "CORP_ACTION" && state !== "SEQUENCER_DOWN";
+export function isShareConversionExecutable(input: {
+  dataState: DataState;
+  unitChangeImminent: boolean;
+  /** Current ratio, 18-decimal fixed point. Zero means it could not be read. */
+  multiplier: bigint;
+}): boolean {
+  if (input.dataState === "SEQUENCER_DOWN" || input.dataState === "CORP_ACTION") return false;
+  // Written as a positive test on purpose: a JavaScript caller compiled against
+  // the older two-field shape passes `undefined` here, this comparison is false,
+  // and the answer is "not executable". An absent field is not evidence that the
+  // unit is readable, and the safe direction is the same one the contract takes.
+  if (!(input.multiplier > 0n)) return false;
+  return !input.unitChangeImminent;
+}
 
 /**
  * @deprecated Misleadingly broad name. Use `isShareConversionExecutable`.

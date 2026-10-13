@@ -4,6 +4,7 @@ import {
   classifyDataState,
   formatAge,
   isShareConversionExecutable,
+  unitChangeImminent,
   type ClassifyInput,
 } from "./market-state.ts";
 
@@ -97,12 +98,35 @@ test("already-applied multiplier change is not pending", () => {
   assert.equal(state, "FRESH");
 });
 
-test("transfers survive a stale price but not a pending corporate action", () => {
-  // The deliberate asymmetry: a transfer needs the multiplier, not the price.
-  assert.equal(isShareConversionExecutable("STALE"), true);
-  assert.equal(isShareConversionExecutable("ORACLE_PAUSED"), true);
-  assert.equal(isShareConversionExecutable("CORP_ACTION"), false);
-  assert.equal(isShareConversionExecutable("SEQUENCER_DOWN"), false);
+test("a stale price does not hide a pending unit change from the send check", () => {
+  const staleSplit = input({
+    updatedAt: NOW - 50 * 3600,
+    effectiveAt: NOW + 1800,
+    pendingMultiplier: 4n * WAD,
+  });
+  assert.equal(classifyDataState(staleSplit), "STALE");
+  assert.equal(unitChangeImminent(staleSplit), true);
+  assert.equal(
+    isShareConversionExecutable({ dataState: "STALE", unitChangeImminent: true, multiplier: WAD }),
+    false,
+  );
+  assert.equal(
+    isShareConversionExecutable({ dataState: "STALE", unitChangeImminent: false, multiplier: WAD }),
+    true,
+  );
+  assert.equal(
+    isShareConversionExecutable({ dataState: "ORACLE_PAUSED", unitChangeImminent: false, multiplier: WAD }),
+    true,
+  );
+  assert.equal(
+    isShareConversionExecutable({ dataState: "ORACLE_PAUSED", unitChangeImminent: true, multiplier: WAD }),
+    false,
+  );
+  assert.equal(isShareConversionExecutable({ dataState: "CORP_ACTION", unitChangeImminent: true, multiplier: WAD }), false);
+  assert.equal(
+    isShareConversionExecutable({ dataState: "SEQUENCER_DOWN", unitChangeImminent: false, multiplier: WAD }),
+    false,
+  );
 });
 
 test("a feed timestamp in the future is stale, not maximally fresh", () => {
@@ -149,4 +173,33 @@ test("an unreadable pending multiplier with a future effectiveAt fails closed", 
     ),
     "FRESH",
   );
+});
+
+test("a token whose ratio cannot be read is not executable, whatever the label says", () => {
+  // `multiplier: 0n` is "uiMultiplier() could not be read". The contract refuses
+  // such a token outright — `transferShares` reverts with `UnitUnavailable` —
+  // so the predicate that exists to predict the contract has to refuse too.
+  // Before this, FRESH with nothing pending and an unreadable ratio returned
+  // true, which is the one answer that gets a caller to sign.
+  for (const dataState of ["FRESH", "STALE", "ORACLE_PAUSED", "NO_FEED"] as const) {
+    assert.equal(
+      isShareConversionExecutable({ dataState, unitChangeImminent: false, multiplier: 0n }),
+      false,
+      `${dataState} with an unreadable ratio must not be executable`,
+    );
+  }
+  assert.equal(
+    isShareConversionExecutable({ dataState: "FRESH", unitChangeImminent: false, multiplier: WAD }),
+    true,
+  );
+});
+
+test("omitting the ratio refuses rather than passes", () => {
+  // TypeScript requires the field; JavaScript does not. An integration written
+  // against the older two-field shape must fail closed instead of keeping the
+  // bug it was written around.
+  const legacy = { dataState: "FRESH", unitChangeImminent: false } as unknown as Parameters<
+    typeof isShareConversionExecutable
+  >[0];
+  assert.equal(isShareConversionExecutable(legacy), false);
 });

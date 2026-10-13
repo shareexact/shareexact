@@ -9,14 +9,18 @@ import {
   parseMultiplier,
 } from "@/lib/conversion";
 import {
+  ApprovalPendingError,
   EXACT_TRANSFER_ADDRESS,
   PreflightError,
   ROUTE_LABEL,
   ShortfallError,
+  TransactionRevertedError,
   explorerTxUrl,
   preflightTransfer,
   sendExactTransfer,
   type Preflight,
+  type SendPhase,
+  type SendResult,
 } from "@/lib/exact-transfer";
 import { displayedShares, STOCKS, getStock } from "@/lib/stocks";
 import { useDesk } from "@/lib/store";
@@ -30,6 +34,25 @@ interface Props {
 
 const ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 const WAD = 10n ** 18n;
+
+/**
+ * What the send is doing right now.
+ *
+ * Spelled out rather than reduced to a spinner, because the two waits have
+ * different consequences: during the first nothing has been transferred and the
+ * transfer has not even been built yet, and a user who closes the tab there has
+ * left an allowance behind and nothing else.
+ */
+const PHASE_TEXT: Record<SendPhase["kind"], string> = {
+  approving: "Waiting for you to approve ExactTransfer for exactly this amount…",
+  "approval-submitted":
+    "Approval submitted. Waiting for it to confirm — the transfer is not built until the allowance exists on chain.",
+  "approval-confirmed": "Approval confirmed. Checking the allowance the chain actually holds…",
+  signing: "Waiting for you to sign the transfer…",
+  submitted: "Transfer submitted. Waiting for the receipt before reporting any numbers.",
+  confirmed: "Receipt in hand.",
+  "timed-out": "No receipt yet. Nothing is proven either way.",
+};
 
 /**
  * The one screen where ShareExact stops describing the problem and does
@@ -55,6 +78,16 @@ export function TransferView({ provider, address }: Props) {
   const [note, setNote] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   /**
+   * What the chain said, and where the send currently is.
+   *
+   * These are separate from `pre` on purpose. `pre` is a prediction; `result` is
+   * a receipt. The screen used to print the prediction under the heading "shares
+   * that leave" the moment a hash came back, which is the one kind of claim this
+   * product exists to refuse.
+   */
+  const [result, setResult] = useState<SendResult | null>(null);
+  const [phase, setPhase] = useState<SendPhase | null>(null);
+  /**
    * Explicit consent to floor-rounding loss.
    *
    * A checkbox rather than a warning paragraph, because the send path now
@@ -64,8 +97,15 @@ export function TransferView({ provider, address }: Props) {
    */
   const [acceptShortfall, setAcceptShortfall] = useState(false);
 
+  // Consent, and the receipt on screen, both belong to one specific amount. Edit
+  // the amount and the previous settlement is no longer describing what the
+  // screen now says, so it goes.
   useEffect(() => {
     setAcceptShortfall(false);
+    setResult(null);
+    setPhase(null);
+    setNote(null);
+    setTxHash(null);
   }, [amount, symbol]);
 
   const stock = getStock(symbol) ?? STOCKS[0];
@@ -122,6 +162,7 @@ export function TransferView({ provider, address }: Props) {
   const recipient = sendingToSelf ? address ?? "" : toTrimmed;
   const shortfall = pre?.shortfall ?? 0n;
   const shortfallCleared = shortfall === 0n || acceptShortfall;
+  const settled = result?.settled ?? null;
   const canSend =
     connected &&
     Boolean(recipient) &&
@@ -160,8 +201,10 @@ export function TransferView({ provider, address }: Props) {
     setBusy(true);
     setNote(null);
     setTxHash(null);
+    setResult(null);
+    setPhase(null);
     try {
-      const result = await sendExactTransfer(provider, {
+      const sent = await sendExactTransfer(provider, {
         token: stock.contract,
         from: address,
         to: recipient,
@@ -169,35 +212,54 @@ export function TransferView({ provider, address }: Props) {
         // Consent is passed as a number, not as a boolean: the send path checks
         // the loss it is about to cause against the loss the user saw.
         maxShortfall: acceptShortfall ? pre.shortfall : 0n,
+        // The call now waits for two receipts, which takes as long as the chain
+        // takes. Phases arrive as they happen so the hash is on screen and
+        // clickable while it waits, rather than the button simply hanging.
+        onPhase: (next) => {
+          setPhase(next);
+          if (next.kind === "submitted") setTxHash(next.hash);
+        },
       });
-      setTxHash(result.hash);
+      setResult(sent);
+      setTxHash(sent.hash);
       setNote(
-        result.route === "guarded"
-          ? "Signed through ExactTransfer: the multiplier was re-read inside the transaction, so the share count is exact by construction."
-          : "Signed as a direct ERC-20 transfer of a raw amount computed from a multiplier read seconds earlier. Exact settlement needs ExactTransfer deployed.",
+        sent.status === "pending"
+          ? sent.pendingReason === "no-event"
+            ? "The transaction confirmed, but its receipt carried no settlement event this desk could read, so no amount is proven here. Open it on the explorer."
+            : "Submitted, but no receipt arrived in time. That is neither a failure nor a success — open it on the explorer to see how it ends."
+          : sent.settled?.source === "event"
+            ? "Confirmed. The numbers below are decoded from the ExactShareTransfer event the contract wrote after re-reading the multiplier inside the transaction."
+            : "Confirmed. The receipt proves how many raw units moved; a plain ERC-20 transfer never named a share count, so none can be read back. That gap is what ExactTransfer closes.",
       );
       addActivity({
         symbol: stock.symbol,
-        uiShares: formatFixedToDecimalString(pre.delivered),
-        raw: formatFixedToDecimalString(result.raw),
-        multiplier: formatMultiplierDisplay(pre.multiplier),
-        note: `to ${shortAddr(recipient)}`,
+        uiShares: formatFixedToDecimalString(sent.settled?.delivered ?? sent.estimate.delivered),
+        raw: formatFixedToDecimalString(sent.settled?.raw ?? sent.estimate.raw),
+        multiplier: formatMultiplierDisplay(sent.settled?.multiplier ?? sent.estimate.multiplier),
+        note: `to ${shortAddr(recipient)} · ${sent.status === "confirmed" ? "confirmed" : "pending"}`,
         // Hash and route travel as their own fields so the activity row can
         // render a real explorer link. A hash printed as plain text is the one
         // number in this product a reviewer cannot check.
-        hash: result.hash,
-        route: result.route,
+        hash: sent.hash,
+        route: sent.route,
       });
       void runPreflight();
     } catch (err) {
+      // A revert and a stranded approval both produced a transaction the user
+      // signed. Keeping the hash means they can go and look at it.
+      if (err instanceof TransactionRevertedError || err instanceof ApprovalPendingError) {
+        setTxHash(err.hash);
+      }
       const message =
         err instanceof ShortfallError
           ? err.message
           : err instanceof Error
             ? err.message
             : "Transaction rejected.";
-      setNote(message.length > 200 ? `${message.slice(0, 200)}…` : message);
+      setNote(message.length > 240 ? `${message.slice(0, 240)}…` : message);
+      void runPreflight();
     } finally {
+      setPhase(null);
       setBusy(false);
     }
   }
@@ -327,9 +389,20 @@ export function TransferView({ provider, address }: Props) {
             <div>
               <p className="text-xs text-muted-foreground">{t.exactTitle}</p>
               <p className="tabular mt-1 font-mono text-lg text-primary">
-                {pre ? formatFixedToDecimalString(pre.delivered) : dry ? amount : "—"}
+                {settled?.delivered != null
+                  ? formatFixedToDecimalString(settled.delivered)
+                  : pre
+                    ? formatFixedToDecimalString(pre.delivered)
+                    : dry
+                      ? amount
+                      : "—"}
               </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">shares that leave</p>
+              {/* The caption changes tense because the provenance changes. Before
+                  the receipt this is arithmetic; after it, it is a fact read out
+                  of the chain's own log. */}
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {settled?.delivered != null ? "shares that left · from the event" : "shares that leave"}
+              </p>
             </div>
           </div>
 
@@ -365,6 +438,49 @@ export function TransferView({ provider, address }: Props) {
               {`This token's multiplier is ${formatFixedToDecimalString(multiplierInUse)}. Sending a typed "1" as raw units moves ${formatFixedToDecimalString(multiplierInUse)} shares, not one.`}
             </p>
           )}
+
+          {phase && (
+            <p className="mt-4 text-sm text-muted-foreground">{PHASE_TEXT[phase.kind]}</p>
+          )}
+
+          {settled && (
+            <div className="mt-5 rounded-md border border-border p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {settled.source === "event" ? "Settled · chain event" : "Settled · ERC-20 log"}
+              </p>
+              <dl className="mt-3 space-y-2 text-sm">
+                <Row k="Raw units moved" v={formatFixedToDecimalString(settled.raw)} />
+                <Row
+                  k="Shares delivered"
+                  v={
+                    settled.delivered != null
+                      ? formatFixedToDecimalString(settled.delivered)
+                      : "not provable from this receipt"
+                  }
+                />
+                {settled.multiplier != null && (
+                  <Row
+                    k="Multiplier at execution"
+                    v={formatMultiplierDisplay(settled.multiplier)}
+                  />
+                )}
+                {settled.shortfall != null && settled.shortfall > 0n && (
+                  <Row k="Shortfall accepted (wei)" v={String(settled.maxShortfall ?? 0n)} />
+                )}
+                {settled.blockNumber != null && <Row k="Block" v={String(settled.blockNumber)} />}
+                {settled.gasUsed != null && <Row k="Gas used" v={String(settled.gasUsed)} />}
+              </dl>
+            </div>
+          )}
+
+          {/* Normally empty. When it is not, the multiplier moved between the
+              preview and the block — the exact race this project is about — and
+              the screen says so instead of quietly showing the newer number. */}
+          {result?.mismatch.map((line) => (
+            <p key={line} className="mt-3 text-sm text-down">
+              {line}
+            </p>
+          ))}
 
           {note && <p className="mt-4 text-sm text-muted-foreground">{note}</p>}
           {txHash && (

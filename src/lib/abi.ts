@@ -142,3 +142,86 @@ export function scaleAnswer(answer: bigint, decimals: number): number {
   const frac = answer % divisor;
   return Number(whole) + Number(frac) / Number(divisor);
 }
+
+/*//////////////////////////////////////////////////////////////
+                          EVENT TOPICS
+//////////////////////////////////////////////////////////////*/
+
+/**
+ * `topics[0]` of a log is keccak256 of the event signature.
+ *
+ * These exist so the desk can read what a transaction actually did instead of
+ * reporting what it predicted beforehand. `transfer` is pinned in `abi.test.ts`
+ * against the value every explorer shows, for the same reason the selectors are:
+ * it proves the table came out of a real keccak run rather than from memory.
+ */
+export const TOPICS = {
+  /** ExactShareTransfer(address,address,address,uint256,uint256,uint256,uint256,uint256) */
+  exactShareTransfer: "0xb2b898b2fa6ac66d43a75ab8119dbfd075f91c3eb28ac39ecbd341780ec98b15",
+  /** Transfer(address,address,uint256) */
+  transfer: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+} as const;
+
+/**
+ * A log as a provider returns it. Every field is optional because this is JSON
+ * arriving from outside, not a shape we control.
+ */
+export interface EventLog {
+  address?: string;
+  topics?: string[];
+  data?: string;
+}
+
+/** The contract's own account of the transfer: three indexed arguments in the
+ *  topics, five numbers in the data. */
+export interface ExactShareTransferEvent {
+  token: string;
+  from: string;
+  to: string;
+  uiShares: bigint;
+  deliveredShares: bigint;
+  raw: bigint;
+  multiplier: bigint;
+  maxShortfall: bigint;
+}
+
+/** An indexed `address` sits right-aligned in a 32-byte topic. */
+function addressFromTopic(topic: string | undefined): string | null {
+  if (typeof topic !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(topic)) return null;
+  return `0x${topic.slice(26)}`.toLowerCase();
+}
+
+export function decodeExactShareTransfer(log: EventLog): ExactShareTransferEvent | null {
+  const topics = log.topics ?? [];
+  if (topics[0]?.toLowerCase() !== TOPICS.exactShareTransfer) return null;
+  const token = addressFromTopic(topics[1]);
+  const from = addressFromTopic(topics[2]);
+  const to = addressFromTopic(topics[3]);
+  if (!token || !from || !to) return null;
+  const words = [0, 1, 2, 3, 4].map((i) => wordAt(log.data, i));
+  // A short data blob is a log we do not understand, which is not the same as a
+  // log full of zeroes. Decode all five numbers or none of them.
+  if (words.some((w) => w === null)) return null;
+  const [uiShares, deliveredShares, raw, multiplier, maxShortfall] = words as bigint[];
+  return { token, from, to, uiShares, deliveredShares, raw, multiplier, maxShortfall };
+}
+
+/**
+ * Decode an ERC-20 `Transfer`.
+ *
+ * This proves how many raw units moved and nothing else. On the preflight route
+ * that is all a receipt can ever prove, because the share count never entered
+ * the transaction — which is exactly the difference between the two routes, now
+ * visible in the receipt instead of only in the documentation.
+ */
+export function decodeErc20Transfer(
+  log: EventLog,
+): { from: string; to: string; value: bigint } | null {
+  const topics = log.topics ?? [];
+  if (topics[0]?.toLowerCase() !== TOPICS.transfer) return null;
+  const from = addressFromTopic(topics[1]);
+  const to = addressFromTopic(topics[2]);
+  const value = wordAt(log.data, 0);
+  if (!from || !to || value === null) return null;
+  return { from, to, value };
+}
