@@ -73,7 +73,11 @@ export function classifyDataState(input: ClassifyInput): DataState {
   }
 
   // 3. A missing or non-positive answer is indistinguishable from a dead feed.
-  if (input.price === null || input.price <= 0 || !input.updatedAt) return "STALE";
+  // `NaN <= 0` is false, so a non-finite price slipped past this guard and was
+  // reported FRESH. An unreadable answer is not a positive one.
+  if (input.price === null || !Number.isFinite(input.price) || input.price <= 0 || !input.updatedAt) {
+    return "STALE";
+  }
 
   // 3b. A timestamp in the future is a broken or hostile feed, not a fresher
   //     one. Mirrors the same check in ShareExactGuard._evaluate.

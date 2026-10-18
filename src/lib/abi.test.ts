@@ -156,3 +156,18 @@ test("an ERC-20 Transfer yields the raw value and the two parties", () => {
   assert.equal(event.value, WAD / 4n);
   assert.equal(decodeErc20Transfer({ topics: [TOPICS.exactShareTransfer], data: "0x" }), null);
 });
+
+test("a latestRoundData reply shorter than five words is refused, as the guard refuses it", () => {
+  const w = (n: bigint) => n.toString(16).padStart(64, "0");
+  const five = `0x${w(1n)}${w(17_840_000_000n)}${w(99n)}${w(100n)}${w(1n)}`;
+  const four = `0x${w(1n)}${w(17_840_000_000n)}${w(99n)}${w(100n)}`;
+  assert.equal((five.length - 2) / 2, 160);
+  assert.equal((four.length - 2) / 2, 128);
+  // Every word this decoder reads exists in the four-word reply, so without a
+  // whole-reply length check it decoded cleanly while
+  // ShareExactGuard._tryLatestRoundData refused the same bytes outright.
+  assert.notEqual(decodeRoundData(five), null);
+  assert.equal(decodeRoundData(four), null);
+  assert.equal(decodeRoundData("0x"), null);
+  assert.equal(decodeRoundData(null), null);
+});

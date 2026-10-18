@@ -198,11 +198,19 @@ export function classifyDataState(input: {
   corpActionWindow: number;
 }): DataState {
   if (!input.sequencerOk) return "SEQUENCER_DOWN";
+  // An unreadable clock. Every staleness comparison below would answer "fresh".
+  if (!readableSeconds(input.now) || !readableSeconds(input.maxStaleness)) {
+    return input.hasFeed ? "STALE" : "NO_FEED";
+  }
   if (!input.hasFeed) {
     if (unitChangeImminent(input)) return "CORP_ACTION";
     return "NO_FEED";
   }
-  if (input.price === null || input.price <= 0 || !input.updatedAt) return "STALE";
+  // `NaN <= 0` is false, so a non-finite price slipped past this guard and was
+  // reported FRESH. An unreadable answer is not a positive one.
+  if (input.price === null || !Number.isFinite(input.price) || input.price <= 0 || !input.updatedAt) {
+    return "STALE";
+  }
   // A timestamp in the future is a broken or hostile feed, not a fresher one.
   // Identical to ShareExactGuard._evaluate and src/lib/market-state.ts.
   if (input.updatedAt > input.now) return "STALE";
@@ -212,10 +220,29 @@ export function classifyDataState(input: {
   return "FRESH";
 }
 
+/**
+ * Time arithmetic with a non-finite number answers "no" to every comparison, so
+ * a stale feed reads fresh and a scheduled unit change reads as not imminent.
+ * Both fail open. Identical to `readableSeconds` in src/lib/market-state.ts —
+ * these two classifiers must not disagree about the same input, which is what
+ * this file's header promises.
+ */
+function readableSeconds(v: number): boolean {
+  return Number.isFinite(v);
+}
+
 export function unitChangeImminent(input: Parameters<typeof classifyDataState>[0]): boolean {
   // Same order as ShareExactGuard._corpActionImminent. An unreadable pending
   // multiplier fails closed for any future effectiveAt, before the window.
-  if (input.effectiveAt == null || input.effectiveAt <= input.now) return false;
+  if (input.effectiveAt == null) return false;
+  if (
+    !readableSeconds(input.now) ||
+    !readableSeconds(input.corpActionWindow) ||
+    !readableSeconds(input.effectiveAt)
+  ) {
+    return true;
+  }
+  if (input.effectiveAt <= input.now) return false;
   if (input.pendingMultiplier === null) return true;
   if (input.multiplier === 0n || input.pendingMultiplier === input.multiplier) return false;
   return input.effectiveAt - input.now <= input.corpActionWindow;

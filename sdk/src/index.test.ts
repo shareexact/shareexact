@@ -297,3 +297,55 @@ test("a truncated latestRoundData reply is refused, exactly as the guard refuses
   const nearly = await readStockToken(reader(padded), TOKEN, { feed: FEED, feedDecimals: 8, now: NOW });
   assert.equal(nearly.dataState, "STALE");
 });
+
+test("the SDK and the app classifier never disagree about the same input", async () => {
+  // Two copies of one rule set is a standing invitation to drift, and it drifted:
+  // a finite-number guard was added to src/lib/market-state.ts first, so for a
+  // while the app answered STALE and this file answered FRESH for the same
+  // malformed input. A differential fixture is cheaper than remembering.
+  const app = await import("../../src/lib/market-state.ts");
+  const base = {
+    sequencerOk: true,
+    hasFeed: true,
+    updatedAt: NOW - 50 * 3600,
+    price: 178.4,
+    now: NOW,
+    maxStaleness: 26 * 3600,
+    oraclePaused: false,
+    effectiveAt: null as number | null,
+    multiplier: WAD,
+    pendingMultiplier: WAD as bigint | null,
+    corpActionWindow: 7200,
+  };
+  const cases: Array<Record<string, unknown>> = [
+    {},
+    { updatedAt: NOW - 60 },
+    { hasFeed: false },
+    { sequencerOk: false },
+    { oraclePaused: true, updatedAt: NOW - 60 },
+    { updatedAt: NOW + 3600 },
+    { effectiveAt: NOW + 1800, pendingMultiplier: 4n * WAD },
+    { effectiveAt: NOW + 5 * 86_400, pendingMultiplier: 4n * WAD },
+    // the ones that used to differ
+    { maxStaleness: NaN },
+    { now: NaN },
+    { corpActionWindow: NaN, effectiveAt: NOW + 1800, pendingMultiplier: 4n * WAD },
+    { effectiveAt: NaN, pendingMultiplier: 4n * WAD },
+    { price: NaN, updatedAt: NOW - 60 },
+    { price: Infinity, updatedAt: NOW - 60 },
+    { price: -Infinity, updatedAt: NOW - 60 },
+  ];
+  for (const override of cases) {
+    const input = { ...base, ...override } as Parameters<typeof classifyDataState>[0];
+    assert.equal(
+      classifyDataState(input),
+      app.classifyDataState(input),
+      `classifyDataState differs for ${JSON.stringify(override, (_k, v) => (typeof v === "bigint" ? `${v}` : v))}`,
+    );
+    assert.equal(
+      unitChangeImminent(input),
+      app.unitChangeImminent(input),
+      `unitChangeImminent differs for ${JSON.stringify(override, (_k, v) => (typeof v === "bigint" ? `${v}` : v))}`,
+    );
+  }
+});

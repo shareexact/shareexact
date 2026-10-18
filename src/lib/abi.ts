@@ -126,6 +126,12 @@ export interface RoundData {
 
 /** Decode Chainlink `latestRoundData()`: (uint80, int256, uint256, uint256, uint80). */
 export function decodeRoundData(hex: string | null | undefined): RoundData | null {
+  // `latestRoundData()` returns five words. ShareExactGuard._tryLatestRoundData
+  // rejects a reply under 160 bytes before reading any of it, and wordAt alone
+  // does not reproduce that: words 0 to 3 are all present in a four-word reply,
+  // so a truncated answer decoded cleanly here and was refused on chain. A
+  // short reply is a payload we do not understand, not one with fields missing.
+  if (typeof hex !== "string" || !hex.startsWith("0x") || hex.length - 2 < 5 * 64) return null;
   const roundId = wordAt(hex, 0);
   const answer = decodeInt256At(hex, 1);
   const startedAt = wordAt(hex, 2);
