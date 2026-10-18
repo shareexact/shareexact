@@ -323,12 +323,20 @@ async function tick(rows, last) {
     appendFileSync(LOG, JSON.stringify(o) + "\n");
 
     if (!prev) {
-      if (!QUIET) {
-        console.log(
-          `${o.ts}  ${row.symbol.padEnd(6)} baseline  state=${o.state}  mult=${fmt18(o.current)}` +
-            `  effectiveAt=${o.tokenEffectiveAt || 0}  paused=${o.oraclePaused}`,
-        );
-      }
+      // Printed even under --quiet, on purpose. diff() returns [] when there is
+      // no previous observation, so a run without a baseline compares nothing.
+      // The log it compares against is restored from a cache, and a cache can be
+      // evicted or fail to restore, so this is reachable in normal operation.
+      // Staying quiet here would let the workflow summarise such a run as "No
+      // change ... all as before" when there was no before — the one report this
+      // watcher must never file. One line of output makes it a failed run and an
+      // email instead. The log is saved on the way out, so the next run resumes
+      // from it and goes quiet again.
+      console.log(
+        `${o.ts}  ${row.symbol.padEnd(6)} NO BASELINE — nothing to compare against` +
+          `  state=${o.state}  mult=${fmt18(o.current)}` +
+          `  effectiveAt=${o.tokenEffectiveAt || 0}  paused=${o.oraclePaused}`,
+      );
     } else if (changes.length > 0) {
       console.log(`\n${o.ts}  ${row.symbol}  block ${o.block}`);
       for (const l of headline(o, changes)) console.log(`  ${l}`);
