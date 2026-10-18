@@ -6,7 +6,7 @@ an admin function that can move a token.
 ```bash
 forge install foundry-rs/forge-std   # first time only
 forge build
-forge test -vv                       # 51 tests
+forge test -vv                       # 87 tests
 ```
 
 ## ShareExactGuard

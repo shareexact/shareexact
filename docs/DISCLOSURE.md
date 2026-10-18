@@ -2,8 +2,12 @@
 
 Copy this into the hackathon submission form. Colosseum's rules allow work begun
 before the start date but judge only what was built inside the window, and
-require prior work to be disclosed. Git history in this repo matches what is
-written below.
+require prior work to be disclosed. This repository was published on 12 October
+2026 as a source snapshot, so its git log starts there and cannot be used to
+check the dates below; the account that held the per-commit history was
+suspended on 7 October and the repository it hosted now returns 404. The
+deployment and transaction timestamps on chain 4663 are unaffected and are
+cited throughout — those are the dates a reviewer can verify.
 
 ---
 
@@ -34,7 +38,7 @@ written below.
   presented without distinction from a live one.
 - `@shareexact/sdk`.
 - `scripts/fetch-feeds.mjs`.
-- 55 TypeScript unit tests and 65 Solidity tests covering conversion,
+- 55 TypeScript unit tests and 65 Solidity tests at that point, covering conversion,
   classification, the ABI codec, the transfer routes, rate limiting, and
   adversarial token and feed behaviour.
 - Documentation: README, architecture, security policy and threat model, demo

@@ -22,7 +22,7 @@ loud that the app refuses to show a mark it cannot source.
 Transfer view, pick the highest-multiplier asset, type a share amount. Show the
 two columns: what a naive integration would move versus what actually moves.
 Sign it. Open the Blockscout link. The recorded proof is the guarded route:
-[0x7a6daf6d…1ada29](https://robinhoodchain.blockscout.com/tx/0x7a6daf6d88386096d3b1d63bb46903782a78669200f24378098cfdb9be1ada29).
+[0x245e8968…dc2a30](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30).
 
 > "The multiplier was read from the token two seconds before signing, not from
 > the registry cache, and not from what the screen was showing."
@@ -90,7 +90,7 @@ costs nothing and hiding it risks the entry.
       a missing deploy.
 - [x] At least one exact transfer executed on mainnet through ExactTransfer,
       tx hash in the README
-      ([0x7a6daf6d…1ada29](https://robinhoodchain.blockscout.com/tx/0x7a6daf6d88386096d3b1d63bb46903782a78669200f24378098cfdb9be1ada29))
+      ([0x245e8968…dc2a30](https://robinhoodchain.blockscout.com/tx/0x245e8968160c2ef8a4e006bb81317ccacf024b1703476408231c0e8d70dc2a30))
 - [ ] `npm test` green in CI, visible in the repo
 - [ ] `@shareexact/sdk` published, or at minimum installable from the repo
 - [ ] Pitch video and technical demo video recorded separately

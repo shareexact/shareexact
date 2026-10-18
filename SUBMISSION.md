@@ -38,8 +38,9 @@ An external review found `ShareExactGuard._evaluate()` returned `NO_FEED` and
 stopped before ever checking for a pending corporate action, so
 `ExactTransfer` — which at that time blocked only on `CORP_ACTION` and
 `SEQUENCER_DOWN` — settled straight across a pending split or dividend on any
-Stock Token with no registered price feed. Fixed in commit `4123646` (contract)
-and `bad3bae` (SDK/app classifier parity), covered by four regression tests in
+Stock Token with no registered price feed. Fixed before the 12 October source
+snapshot, in the contract and then in SDK/app classifier parity; those commit
+hashes are not reachable in this repository. Covered by four regression tests in
 `contracts/test/CorpActionCoverage.t.sol`. Because `ExactTransfer.guard` is
 immutable, shipping this required a full redeploy: guard
 `0x290558b05dec593af7b2ef6dbc26b9ffc38adb37`, ExactTransfer
@@ -118,7 +119,10 @@ Follow `docs/DEMO.md` exactly. The desk opens on Transfer by design.
 ## What is real and what is not
 
 Real: the registry, balances, multipliers, eight Chainlink feeds on the guard,
-sequencer status, the contracts, and the signed transfer through ExactTransfer.
+the contracts, and the signed transfer through ExactTransfer. The sequencer
+uptime check is implemented in the guard, but no uptime feed is configured on
+4663 — `sequencerFeed()` is the zero address, so `SEQUENCER_DOWN` cannot occur
+on this deployment.
 
 Simulation, and labelled in the UI: the stress scenarios and the volatility and
 LTV tables in the risk view. These are demo heuristics. This is not a lending
@@ -141,7 +145,7 @@ Copy that file into the submission form verbatim.
 node --version    # 22.12 or newer
 npm install
 npm run dev
-npm test          # 55 TypeScript tests + 65 Solidity tests
+npm test          # 92 TypeScript unit tests + 87 Solidity tests
 npm run deploy:verify
 ```
 

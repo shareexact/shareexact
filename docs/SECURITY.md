@@ -8,7 +8,7 @@ to look at.
 
 | Actor | Power | Bound |
 | --- | --- | --- |
-| Guard owner | Registers feeds, sets staleness bounds and the sequencer feed | **This is the main trust assumption.** An owner who registers a wrong feed can make a bad price read FRESH. All configuration emits events; ownership transfer is two-step. For anything beyond a demo this key must be a multisig behind a timelock |
+| Guard owner | Registers feeds, sets staleness bounds and the sequencer feed | **This is the main trust assumption.** An owner who registers a wrong feed can make a bad price read FRESH. All configuration emits events; ownership transfer is two-step. On 4663 the owner is a TimelockController (24 h delay) whose sole proposer is a 2-of-3 Safe |
 | Token issuer | Controls `uiMultiplier` and `oraclePaused` on the Stock Token | Out of scope. If the issuer lies about the ratio, nothing downstream can detect it |
 | Chainlink | Supplies price and sequencer uptime | Feed correctness is assumed; freshness is not — that is the entire point of the guard |
 | `ExactTransfer` | None | Holds no balance, has no admin function, cannot be upgraded. Spends an existing allowance inside the transfer and retains nothing afterwards |
@@ -41,12 +41,19 @@ before a split is not.
 An earlier version of this README claimed view functions never revert. That was
 an overclaim and has been narrowed:
 
-- **Observation does not revert on a failed call, short data, or a dirty boolean.**
-  It does revert when `latestRoundData()` returns 160 bytes and a `uint80`
-  field does not fit. That takes `state()`, `priceOf()`, `usdValue()`, and
-  `ExactTransfer.quote()` with it. `multiplierOf()` never reads a round, so a
-  dirty word there does not revert. This decode is still in the deployed guard.
-  See `docs/INTEGRATING.md`.
+- **Observation does not revert on a failed call, short data, a dirty boolean,
+  or an out-of-range `uint80`.** An earlier revision did revert on the last of
+  those: `abi.decode` range-checks the two `uint80` fields, and a 160-byte
+  payload with a dirty `roundId` or `answeredInRound` took `state()`,
+  `priceOf()`, `usdValue()` and `ExactTransfer.quote()` down with it. That
+  decode is gone. The guard now reads the round as raw words and uses only
+  `answer` and `updatedAt`, so a dirty value in a field it never reads changes
+  nothing at all — the state is whatever the answer and timestamp say, `FRESH`
+  in the pinned case. Short data is the separate case: under 160 bytes the read
+  fails and the state is `STALE`. `multiplierOf()` never reads a round. Pinned
+  by `test_dirtyRoundIdDoesNotRevertObservation` and
+  `test_dirtyAnsweredInRoundDoesNotRevertObservation`; the deployed runtime is
+  byte-identical to this source. See `docs/INTEGRATING.md`.
 - **Conversion fails closed.** `sharesToRaw()` and `rawToShares()` revert when
   the multiplier cannot be read, because returning a wrong unit moves a wrong
   amount of money. `usdValue()` is not in that list: a Chainlink feed prices one
@@ -179,9 +186,11 @@ Found by a fourth review round:
 
 Known and not fixed:
 
-- Guard configuration is single-owner. Two-step transfer and events are in
-  place; multisig and timelock are prerequisites for any lending integration and
-  are not claimed to exist.
+- Guard configuration is owned by a TimelockController with a 24-hour minimum
+  delay, whose only proposer and canceller is a 2-of-3 Safe v1.5.0. Execution
+  after the delay is open to anyone and the timelock is its own admin. The
+  deployer holds no role on the timelock, but is one of the Safe's three owners.
+  None of this is audited.
 - A hostile token can change its own multiplier inside `transferFrom`. Pinned by
   `test_multiplierMutationDuringTransferSettlesAtQuotedRatio`, which shows the
   transfer settles at the quoted ratio and the contract retains no balance. Out

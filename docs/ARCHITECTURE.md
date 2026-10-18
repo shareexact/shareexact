@@ -134,8 +134,10 @@ the app losing their money. `conversion.ts` is `BigInt`-only, written without
 TypeScript parameter properties so the whole path runs under
 `node --experimental-strip-types --test` with no bundler in the loop.
 
-Rounding is always floor, in both directions, so a conversion can only ever lose
-a wei — never create one. `conversion.test.ts` pins the 4× trap and a round trip;
+Rounding is always floor, in both directions, so a conversion never creates
+value. It can lose more than one wei: a share round trip loses 2 at NVDA's
+multiplier (first at 1292) and 3 at 4× (first at 3), bounded by
+`multiplier / 1e18 + 1`. `conversion.test.ts` pins the 4× trap and a round trip;
 `testFuzz_roundTripNeverInflates` in `ShareExactGuard.t.sol` runs the same
 invariant over Foundry's default 256 fuzz pairs.
 

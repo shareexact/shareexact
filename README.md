@@ -202,7 +202,8 @@ project's own claims too.
 token registry from Robinhood's `/rhj/assets`, balances via batched `balanceOf`,
 `uiMultiplier()` / `newUIMultiplier()` / `effectiveAt()` / `oraclePaused()` read
 from each token, Chainlink `latestRoundData()` for the eight registered feeds,
-sequencer uptime, and signed ERC-20 transfers computed from the live multiplier.
+and signed ERC-20 transfers computed from the live multiplier. The sequencer
+uptime check exists in the guard, but no uptime feed is set on 4663.
 
 Live exact send through the retired 20 Sep ExactTransfer `0x507b…68ab`:
 [0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03](https://robinhoodchain.blockscout.com/tx/0x3790392a8666788f867b0399e5557b77a5ad24764dce1ad9929a2701768e6b03).
