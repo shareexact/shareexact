@@ -222,8 +222,21 @@ Video demo tx (19 Sep 2026), 0.01 NVDA → `0.009992254412416894` raw:
 [0x1e8e80f32b847899f02d2c1ac4fdf2eee44bb28583a4372fd00eb23c499569f3](https://robinhoodchain.blockscout.com/tx/0x1e8e80f32b847899f02d2c1ac4fdf2eee44bb28583a4372fd00eb23c499569f3).
 This is the transaction shown in the technical demo.
 
-Blockscout reports the raw ERC-20 amount because explorers do not read
-`uiMultiplier`. That disagreement is the product.
+Blockscout reads `uiMultiplier`. Its API classifies this token as `ERC-8056`
+and, for the transfer above, returns `ui_multiplier` 1.000775159164630595 beside
+the raw `value` 9992254412416894. Scaled, that is `0.009999999999999999` —
+exactly the `deliveredShares` in the event this contract emitted. The explorer
+and the desk agree.
+
+What is left is the gap that was always the point: `0.01` is not a representable
+number of shares at this multiplier. Scaling back is exact only when the raw
+amount is a multiple of `1e18 / gcd(multiplier, 1e18)`, which is 0.2 raw here,
+and this transfer is not on that grid. So the sender could not receive the
+`0.01` they typed, and the log says so: `maxShortfall = 1`, the one wei of a
+share they agreed to lose, recorded beside what they actually lost.
+
+The product is not that explorers are wrong. It is that the shortfall is named
+before the signature, consented to, and provable afterwards, instead of silent.
 
 **Real on the eight registered names; indicative on the rest:** a name the Guard
 does not have a feed for reports `NO_FEED` and the desk labels the mark as
