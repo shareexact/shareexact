@@ -56,6 +56,14 @@ export function classifyDataState(input: ClassifyInput): DataState {
   // 1. Chain liveness. Nothing else is meaningful while the sequencer is down.
   if (!input.sequencerOk) return "SEQUENCER_DOWN";
 
+  // 1b. An unreadable clock. Every staleness comparison below would silently
+  //     answer "fresh", so say so instead. `unitChangeImminent` fails closed on
+  //     the same inputs, and isShareConversionExecutable ends in
+  //     `!unitChangeImminent`, so the pair still refuses the send.
+  if (!readableSeconds(input.now) || !readableSeconds(input.maxStaleness)) {
+    return input.hasFeed ? "STALE" : "NO_FEED";
+  }
+
   // 2. A missing price feed does not make the unit safe. Transfers read the
   //    multiplier, not the price, so a pending split is CORP_ACTION even when
   //    no aggregator is registered.
@@ -83,11 +91,32 @@ export function classifyDataState(input: ClassifyInput): DataState {
   return "FRESH";
 }
 
+/**
+ * Time arithmetic with a non-finite number answers "no" to every comparison.
+ * `now - updatedAt > NaN` is false, so a stale feed reads fresh;
+ * `effectiveAt - NaN <= window` is false, so a pending unit change reads as
+ * not imminent. Both fail open, which is the wrong direction for every other
+ * rule in this file. An unreadable clock is a unit failure, not a clean bill.
+ */
+function readableSeconds(v: number): boolean {
+  return Number.isFinite(v);
+}
+
 export function unitChangeImminent(input: ClassifyInput): boolean {
   // Same order as ShareExactGuard._corpActionImminent. An unreadable pending
   // multiplier fails closed for any future effectiveAt, before the window.
   // The window applies only once both multipliers can be compared.
-  if (input.effectiveAt == null || input.effectiveAt <= input.now) return false;
+  if (input.effectiveAt == null) return false;
+  // An unreadable clock, window or schedule cannot rule a change out, and every
+  // comparison below would answer "not imminent". Fail closed instead.
+  if (
+    !readableSeconds(input.now) ||
+    !readableSeconds(input.corpActionWindow) ||
+    !readableSeconds(input.effectiveAt)
+  ) {
+    return true;
+  }
+  if (input.effectiveAt <= input.now) return false;
   if (input.pendingMultiplier === null) return true;
   // 0n is "current multiplier could not be read", which the contract treats as
   // not imminent once the pending value itself was readable (`!okCur`).

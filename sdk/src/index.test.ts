@@ -264,3 +264,36 @@ test("the ordinary durations still pass", async () => {
   });
   assert.equal(state.dataState, "NO_FEED");
 });
+
+test("a truncated latestRoundData reply is refused, exactly as the guard refuses it", async () => {
+  // ShareExactGuard._tryLatestRoundData returns (false, 0, 0) when the reply is
+  // shorter than 160 bytes, before reading any word of it. wordAt does not:
+  // words 1 and 3 both exist in a four-word answer, so price and timestamp were
+  // read and the state came back FRESH for bytes the contract refuses. That is
+  // the SDK and the guard disagreeing, which this file's header says cannot
+  // happen.
+  const TOKEN = `0x${"11".repeat(20)}`;
+  const FEED = `0x${"22".repeat(20)}`;
+  const five = `0x${word(1n)}${word(17_840_000_000n)}${word(BigInt(NOW))}${word(BigInt(NOW))}${word(1n)}`;
+  const four = `0x${word(1n)}${word(17_840_000_000n)}${word(BigInt(NOW))}${word(BigInt(NOW))}`;
+  assert.equal((five.length - 2) / 2, 160);
+  assert.equal((four.length - 2) / 2, 128);
+
+  const reader =
+    (reply: string): CallFn =>
+    async (to: string) =>
+      to.toLowerCase() === FEED.toLowerCase() ? reply : `0x${word(WAD)}`;
+
+  const whole = await readStockToken(reader(five), TOKEN, { feed: FEED, feedDecimals: 8, now: NOW });
+  assert.equal(whole.dataState, "FRESH");
+  assert.equal(whole.price, 178.4);
+
+  const cut = await readStockToken(reader(four), TOKEN, { feed: FEED, feedDecimals: 8, now: NOW });
+  assert.equal(cut.dataState, "STALE");
+  assert.equal(cut.price, null);
+
+  // One word short of the threshold is still short, whatever it contains.
+  const padded = `0x${word(1n)}${word(17_840_000_000n)}${word(BigInt(NOW))}${word(BigInt(NOW))}${word(1n).slice(2)}`;
+  const nearly = await readStockToken(reader(padded), TOKEN, { feed: FEED, feedDecimals: 8, now: NOW });
+  assert.equal(nearly.dataState, "STALE");
+});

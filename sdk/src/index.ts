@@ -87,6 +87,22 @@ function toBigInt(hex: string | null | undefined): bigint | null {
   }
 }
 
+/**
+ * `latestRoundData()` returns five words. A shorter reply is one this library
+ * does not understand, not one with missing fields, and
+ * `ShareExactGuard._tryLatestRoundData` rejects it outright on the same
+ * 160-byte threshold before reading any word of it.
+ *
+ * The distinction matters because `wordAt` succeeds on a truncated reply:
+ * words 1 and 3 are both present in a four-word answer, so price and timestamp
+ * were read and reported FRESH for a payload the contract refuses. That is the
+ * SDK and the guard disagreeing about the same bytes, which is the one thing
+ * this file claims cannot happen.
+ */
+function isFullRoundData(hex: string | null | undefined): hex is string {
+  return typeof hex === "string" && hex.startsWith("0x") && hex.length - 2 >= 5 * 64;
+}
+
 function wordAt(hex: string | null | undefined, index: number): bigint | null {
   if (!hex || hex === "0x") return null;
   const body = hex.slice(2);
@@ -250,7 +266,7 @@ export async function readStockToken(
 
   let price: number | null = null;
   let priceUpdatedAt: number | null = null;
-  if (options.feed && roundHex) {
+  if (options.feed && isFullRoundData(roundHex)) {
     const rawAnswer = wordAt(roundHex, 1);
     const updated = wordAt(roundHex, 3);
     if (rawAnswer !== null) {

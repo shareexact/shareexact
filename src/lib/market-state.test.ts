@@ -203,3 +203,42 @@ test("omitting the ratio refuses rather than passes", () => {
   >[0];
   assert.equal(isShareConversionExecutable(legacy), false);
 });
+
+test("a non-finite clock fails closed instead of reading fresh", () => {
+  // Every comparison against NaN is false, so before this was guarded a stale
+  // feed classified FRESH and a scheduled unit change reported as not
+  // imminent. Both failed open, which is the wrong direction for this file.
+  const stale = input({ updatedAt: NOW - 50 * 3600 });
+  assert.equal(classifyDataState(stale), "STALE");
+  for (const bad of [{ now: NaN }, { maxStaleness: NaN }, { now: Infinity }]) {
+    assert.equal(classifyDataState({ ...stale, ...bad }), "STALE", JSON.stringify(bad));
+  }
+  // ... and without a feed it is still not reported as a clean read.
+  assert.equal(classifyDataState({ ...stale, hasFeed: false, now: NaN }), "NO_FEED");
+});
+
+test("a non-finite clock cannot rule out a scheduled unit change", () => {
+  const split = input({ effectiveAt: NOW + 1800, pendingMultiplier: 4n * WAD });
+  assert.equal(unitChangeImminent(split), true);
+  // A change far outside the window is not imminent — unless the clock that
+  // decides "outside" is unreadable.
+  const far = input({ effectiveAt: NOW + 5 * 86_400, pendingMultiplier: 4n * WAD });
+  assert.equal(unitChangeImminent(far), false);
+  for (const bad of [{ now: NaN }, { corpActionWindow: NaN }, { effectiveAt: NaN }]) {
+    assert.equal(unitChangeImminent({ ...far, ...bad }), true, JSON.stringify(bad));
+  }
+  // No scheduled change at all stays false: a bad clock is not an alarm by itself.
+  assert.equal(unitChangeImminent({ ...input({ effectiveAt: null }), now: NaN }), false);
+});
+
+test("a non-finite clock blocks the send", () => {
+  const bad = input({ updatedAt: NOW - 50 * 3600, effectiveAt: NOW + 5 * 86_400, pendingMultiplier: 4n * WAD, now: NaN });
+  assert.equal(
+    isShareConversionExecutable({
+      dataState: classifyDataState(bad),
+      unitChangeImminent: unitChangeImminent(bad),
+      multiplier: WAD,
+    }),
+    false,
+  );
+});

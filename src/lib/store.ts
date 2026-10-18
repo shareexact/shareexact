@@ -65,6 +65,21 @@ export interface ActivityItem {
   hash?: string;
   /** How it settled. Absent for rows that predate the distinction. */
   route?: "guarded" | "preflight";
+  /**
+   * What the chain proved about the numbers in this row.
+   *
+   * `event` — an `ExactShareTransfer` was decoded, so the share count and the
+   *   multiplier are the ones the contract used inside the transaction.
+   * `erc20` — only the token's own `Transfer` was in the receipt. It proves
+   *   `raw`, and cannot prove a share count, because the transaction never
+   *   named one.
+   * `none`  — no receipt yet. Nothing in the row is proven either way.
+   *
+   * Absent on rows that predate the distinction. It exists because the row
+   * must not print a prediction under a "confirmed" label, which is the one
+   * claim this product exists to refuse.
+   */
+  proof?: "event" | "erc20" | "none";
 }
 
 interface DeskState {

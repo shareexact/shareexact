@@ -391,6 +391,11 @@ export function DeskApp() {
                     <span>
                       {a.symbol} · {a.uiShares} sh → raw {a.raw} · {a.multiplier}
                       {a.route ? ` · ${a.route}` : ""} · {a.note}
+                      {a.proof === "erc20"
+                        ? " · share count and multiplier not proven on chain"
+                        : a.proof === "none"
+                          ? " · nothing proven yet"
+                          : ""}
                     </span>
                     {a.hash && (
                       <>

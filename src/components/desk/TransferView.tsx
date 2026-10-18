@@ -231,7 +231,15 @@ export function TransferView({ provider, address }: Props) {
             ? "Confirmed. The numbers below are decoded from the ExactShareTransfer event the contract wrote after re-reading the multiplier inside the transaction."
             : "Confirmed. The receipt proves how many raw units moved; a plain ERC-20 transfer never named a share count, so none can be read back. That gap is what ExactTransfer closes.",
       );
+      // `settled.delivered` and `settled.multiplier` are null on the direct
+      // route deliberately: that transaction never named a share count, so none
+      // can be read back. `??` treats null as "absent" and substitutes the
+      // preflight's estimate, which the row then showed beside "confirmed".
+      // The estimate is still worth showing — it is what the user asked for —
+      // but the row has to say which of these numbers the chain stood behind.
+      const proof: "event" | "erc20" | "none" = sent.settled?.source ?? "none";
       addActivity({
+        proof,
         symbol: stock.symbol,
         uiShares: formatFixedToDecimalString(sent.settled?.delivered ?? sent.estimate.delivered),
         raw: formatFixedToDecimalString(sent.settled?.raw ?? sent.estimate.raw),
