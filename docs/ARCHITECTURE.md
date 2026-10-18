@@ -135,9 +135,10 @@ TypeScript parameter properties so the whole path runs under
 `node --experimental-strip-types --test` with no bundler in the loop.
 
 Rounding is always floor, in both directions, so a conversion never creates
-value. It can lose more than one wei: a share round trip loses 2 at NVDA's
-multiplier (first at 1292) and 3 at 4× (first at 3), bounded by
-`multiplier / 1e18 + 1`. `conversion.test.ts` pins the 4× trap and a round trip;
+value — but it can lose more than one wei. A share round trip loses at most 2
+at NVDA's multiplier, first at 1292 wei of a share, and at most 3 at 4×, where
+the loss is exactly `uiShares mod 4`. The loss grows with the multiplier; it is
+not capped at a single wei. `conversion.test.ts` pins the 4× trap and a round trip;
 `testFuzz_roundTripNeverInflates` in `ShareExactGuard.t.sol` runs the same
 invariant over Foundry's default 256 fuzz pairs.
 

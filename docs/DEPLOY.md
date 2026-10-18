@@ -139,8 +139,9 @@ that the source text is identical down to comments and identifier names, which
 is precisely what the metadata hash would have pinned. Anyone can close that
 gap by recompiling the public source and diffing the runtime bytecode. The
 `commit` field in the deployment record predates the 12 October snapshot and is
-not reachable in this repository's history; the published HEAD compiles to
-byte-identical runtime bytecode, which is the thing to check.
+not reachable in this repository's history, so recompiling the published HEAD
+and diffing the runtime is the check that replaces it. Blockscout has done that
+recompile for both contracts; its verified status is the one-click version.
 
 ### Small transactions need a bigger gas limit than Foundry estimates
 

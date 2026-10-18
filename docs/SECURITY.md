@@ -52,8 +52,9 @@ an overclaim and has been narrowed:
   in the pinned case. Short data is the separate case: under 160 bytes the read
   fails and the state is `STALE`. `multiplierOf()` never reads a round. Pinned
   by `test_dirtyRoundIdDoesNotRevertObservation` and
-  `test_dirtyAnsweredInRoundDoesNotRevertObservation`; the deployed runtime is
-  byte-identical to this source. See `docs/INTEGRATING.md`.
+  `test_dirtyAnsweredInRoundDoesNotRevertObservation`. Both contracts verify
+  against this source on Blockscout, as a partial match for the reason given in
+  `docs/DEPLOY.md`. See `docs/INTEGRATING.md`.
 - **Conversion fails closed.** `sharesToRaw()` and `rawToShares()` revert when
   the multiplier cannot be read, because returning a wrong unit moves a wrong
   amount of money. `usdValue()` is not in that list: a Chainlink feed prices one
