@@ -17,6 +17,12 @@
 # observation in its JSONL log. Without carrying that log between runs, every
 # poll would be a fresh baseline and no change would ever be noticed.
 
+# Runner image is pinned, not `ubuntu-latest`. GitHub moves that label from
+# Ubuntu 24.04 to 26.04 gradually between 19 Oct and 19 Nov 2026, and 26.04
+# changes and removes tools. A silent image swap mid-submission is a risk with
+# no upside here, so this pin stays until the competition is over, then the
+# jobs get run once on `ubuntu-26.04` before the pin is lifted.
+
 name: corp-action watch
 
 on:
@@ -37,7 +43,7 @@ permissions:
 
 jobs:
   poll:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:

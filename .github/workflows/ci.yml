@@ -1,3 +1,9 @@
+# Runner image is pinned, not `ubuntu-latest`. GitHub moves that label from
+# Ubuntu 24.04 to 26.04 gradually between 19 Oct and 19 Nov 2026, and 26.04
+# changes and removes tools. A silent image swap mid-submission is a risk with
+# no upside here, so this pin stays until the competition is over, then the
+# jobs get run once on `ubuntu-26.04` before the pin is lifted.
+
 name: CI
 
 # A judge should not have to clone a repository and run a toolchain to believe a
@@ -13,7 +19,7 @@ on:
 jobs:
   app:
     name: typecheck · lint · unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +47,7 @@ jobs:
 
   contracts:
     name: forge build · forge test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,7 +78,7 @@ jobs:
 
   analysis:
     name: static analysis (advisory)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
