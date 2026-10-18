@@ -126,6 +126,19 @@ source tab shows verified code, and flip `"verified": true` in the JSON. That
 field is a claim about something a reviewer can check in one click, so it should
 never be true before the click works.
 
+Blockscout labels both contracts a **partial match**, not a full one. That is a
+consequence of this repository's build settings, not a discrepancy:
+`foundry.toml` sets `bytecode_hash = "none"`, so no metadata hash is appended to
+the deployed bytecode — its CBOR trailer is ten bytes and carries only
+`solc 0.8.24`. A full match is defined as the recompiled source's metadata hash
+equalling the one in the bytecode, and there is none here to equal.
+
+What a partial match does establish: the executable bytecode on chain is what
+this source compiles to under the settings above. What it does not establish:
+that the source text is identical down to comments and identifier names, which
+is precisely what the metadata hash would have pinned. Anyone can close that
+gap by recompiling at the recorded commit and diffing the runtime bytecode.
+
 ### Small transactions need a bigger gas limit than Foundry estimates
 
 Learned on testnet on 25 Sep, which is the only reason it was not learned on
@@ -308,10 +321,10 @@ is downstream of that minute going well.
 
 ## Done when
 
-- [ ] `npm run deploy:verify` exits zero against chain 4663
-- [ ] Both explorer source tabs show verified contracts
-- [ ] `"verified": true` in `deployments/chain-4663.json`, set after checking
-- [ ] At least three feeds registered, one with a multiplier above 1.0
+- [x] `npm run deploy:verify` exits zero against chain 4663 — 20/20 on 18 Oct 2026
+- [x] Both explorer source tabs show verified contracts — partial match, see above
+- [x] `"verified": true` in `deployments/chain-4663.json`, set after checking
+- [x] At least three feeds registered, one with a multiplier above 1.0 — 8 registered, 5 above 1.0
 - [ ] Price banner reads Chainlink with an age, not "indicative"
 - [ ] Transfer badge reads "Exact settlement"
 - [ ] A guarded-route transaction hash recorded and linked

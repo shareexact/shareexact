@@ -89,6 +89,6 @@
     "kind": "timelock",
     "owner": "0x1586de8B6eEBf195faC0f8604825dD331aA74d41",
     "minDelaySeconds": 86400,
-    "proposers": []
+    "proposers": ["0x588BbB3A33E61F081CFa2423FF507682450Ef3aC"]
   }
 }

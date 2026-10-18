@@ -84,7 +84,7 @@ costs nothing and hiding it risks the entry.
 ## Checklist
 
 - [x] Guard and ExactTransfer deployed and verified on 4663; addresses in README
-      and `deployments/chain-4663.json`. `npm run deploy:verify` is 16/16.
+      and `deployments/chain-4663.json`. `npm run deploy:verify` is 20/20.
 - [x] Eight feeds on the Guard (AAPL GOOGL INTC MSFT NVDA SLV SPY TSLA). Other
       names still report `NO_FEED` / indicative — that is the remaining gap, not
       a missing deploy.
