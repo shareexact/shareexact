@@ -225,6 +225,40 @@ const fmt18 = (v) => {
   return `${s.slice(0, s.length - 18)}.${s.slice(s.length - 18).replace(/0+$/, "") || "0"}`;
 };
 
+/**
+ * A `state` flip between FRESH and STALE is the trading week, not an event.
+ *
+ * Robinhood equity feeds publish 24/5 and hold the last value when the market
+ * is shut, and the guard calls a price older than its staleness bound STALE —
+ * 26 hours for these feeds. So every weekend produces exactly two flips,
+ * FRESH → STALE on Saturday and STALE → FRESH when the feed resumes, and every
+ * market holiday produces two more. Alarming on them cost two red runs a week
+ * and buried the one alarm this watcher exists to raise.
+ *
+ * Nothing is lost by ignoring them here. The unit signal does not travel
+ * through `state()`: `tokenNewUIMultiplier`, `tokenEffectiveAt` and
+ * `oraclePaused` are read straight from the token in `observe()`, so a
+ * corporate action scheduled over a weekend still reports even while the price
+ * is stale and `state()` therefore reads STALE rather than CORP_ACTION. Every
+ * state a transfer must refuse — CORP_ACTION, ORACLE_PAUSED, SEQUENCER_DOWN —
+ * still reports, as does NO_FEED, which would mean a feed was removed.
+ *
+ * The observation is still written to the log either way. What changes is only
+ * whether the run goes red.
+ *
+ * What this does give up: a feed that genuinely dies mid-week no longer raises
+ * an alarm by itself. That is a price-freshness concern rather than a unit one,
+ * it is visible on the desk and in `deploy:verify`, and the log still records
+ * every reading. Alarming on a stale stretch longer than any weekend would
+ * recover it, and is the obvious next step if it is ever wanted.
+ */
+const PRICE_FRESHNESS_STATES = new Set(["FRESH", "STALE"]);
+
+function isReportable(change) {
+  if (change.field !== "state") return true;
+  return !(PRICE_FRESHNESS_STATES.has(change.from) && PRICE_FRESHNESS_STATES.has(change.to));
+}
+
 function headline(o, changes) {
   const lines = [];
 
@@ -337,7 +371,7 @@ async function tick(rows, last) {
           `  state=${o.state}  mult=${fmt18(o.current)}` +
           `  effectiveAt=${o.tokenEffectiveAt || 0}  paused=${o.oraclePaused}`,
       );
-    } else if (changes.length > 0) {
+    } else if (changes.some(isReportable)) {
       console.log(`\n${o.ts}  ${row.symbol}  block ${o.block}`);
       for (const l of headline(o, changes)) console.log(`  ${l}`);
       for (const c of changes) {
