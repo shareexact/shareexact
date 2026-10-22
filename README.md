@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="assets/shareexact-logo-premium.gif"
+       alt="ShareExact. Exact Shares. Real Value."
+       width="720" />
+</p>
+
 # ShareExact
 
 [![CI](https://github.com/shareexact/shareexact/actions/workflows/ci.yml/badge.svg)](https://github.com/shareexact/shareexact/actions/workflows/ci.yml)
